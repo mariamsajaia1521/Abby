@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
+<title>PetLog — ჩემი ძაღლი</title>
+<meta name="description" content="ძაღლის ჯანმრთელობის, რუტინისა და მოგონებების პირადი დღიური">
+<meta name="theme-color" content="#7C5CFC">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="PetLog">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="app-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Noto+Serif+Georgian:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>
+  /* Applied inline, before style.css finishes painting anything, so a
+     saved theme choice is already on <html> for first paint — no
+     flash of the wrong theme. Kept deliberately tiny and defensive
+     (storage can be unavailable in private-mode/restricted WebViews). */
+  (function(){
+    try{
+      var saved = localStorage.getItem('petlog.theme');
+      if(saved === 'light' || saved === 'dark'){
+        document.documentElement.setAttribute('data-theme', saved);
+      }
+    }catch(err){ /* no persisted preference available yet — OS default applies */ }
+  })();
+</script>
+</head>
+<body>
+
+<!-- Shared gradient definitions for inline SVG icons (zero-size, defs only) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="rhythmGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C5CFC"/>
+      <stop offset="55%" stop-color="#B156F0"/>
+      <stop offset="100%" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<!-- ============ SPLASH SCREEN ============ -->
+<!-- Orchestrated loading sequence: logo scales in with a rotating gradient
+     ring + sheen sweep, the wordmark reveals letter-by-letter, and a status
+     line + progress bar step through stages (driven from app.js), before
+     the whole screen fades out to reveal the app underneath. -->
+<section id="splash-screen" class="splash-screen" aria-label="იტვირთება">
+  <figure class="splash-logo-wrap">
+    <img src="app-logo.png" class="splash-logo" alt="PetLog" id="splash-logo-img">
+    <span class="logo-fallback" id="splash-logo-fallback" aria-hidden="true">
+      <svg viewBox="0 0 24 24" class="icon-svg icon-paw"><path d="M12 13.6c-2.5 0-4.6 2.1-4.6 4.9 0 1.9 1.4 3.3 3 3.3.9 0 1.6-.4 1.6-.4s.7.4 1.6.4c1.6 0 3-1.4 3-3.3 0-2.8-2.1-4.9-4.6-4.9Z" fill="currentColor"/><ellipse cx="6.3" cy="9.4" rx="1.8" ry="2.3" fill="currentColor"/><ellipse cx="10.1" cy="6.3" rx="1.8" ry="2.4" fill="currentColor"/><ellipse cx="13.9" cy="6.3" rx="1.8" ry="2.4" fill="currentColor"/><ellipse cx="17.7" cy="9.4" rx="1.8" ry="2.3" fill="currentColor"/></svg>
+    </span>
+  </figure>
+  <p class="splash-title brand-mark" id="splash-title" aria-label="PetLog">PetLog</p>
+  <p class="splash-status" id="splash-status">თქვენი ძაღლის სივრცე იტვირთება</p>
+  <div class="splash-progress" aria-hidden="true">
+    <span class="splash-progress-fill" id="splash-progress-fill"></span>
+  </div>
+</section>
+
+<!-- ============ ONBOARDING VIEW ============ -->
+<main id="onboarding-view" class="view onboarding-view">
+<div class="onboarding-card">
+  <figure class="logo-figure">
+    <img src="app-logo.png" class="app-logo" alt="PetLog ლოგო" id="onboarding-logo-img">
+    <span class="logo-fallback" id="onboarding-logo-fallback" aria-hidden="true">
+      <svg viewBox="0 0 24 24" class="icon-svg icon-paw"><path d="M12 13.6c-2.5 0-4.6 2.1-4.6 4.9 0 1.9 1.4 3.3 3 3.3.9 0 1.6-.4 1.6-.4s.7.4 1.6.4c1.6 0 3-1.4 3-3.3 0-2.8-2.1-4.9-4.6-4.9Z" fill="currentColor"/><ellipse cx="6.3" cy="9.4" rx="1.8" ry="2.3" fill="currentColor"/><ellipse cx="10.1" cy="6.3" rx="1.8" ry="2.4" fill="currentColor"/><ellipse cx="13.9" cy="6.3" rx="1.8" ry="2.4" fill="currentColor"/><ellipse cx="17.7" cy="9.4" rx="1.8" ry="2.3" fill="currentColor"/></svg>
+    </span>
+  </figure>
+
+  <section class="onboarding-intro">
+    <h1 class="brand-mark"><span class="brand-pet">Pet</span><span class="brand-log">Log</span></h1>
+    <p>თქვენი ოთხფეხა მეგობრის ციფრული სივრცე</p>
+  </section>
+
+  <form id="onboarding-form" class="onboarding-form" autocomplete="off">
+    <fieldset class="field-group">
+      <legend class="visually-hidden">ძაღლის მონაცემები</legend>
+
+      <label class="field">
+        <span class="field-label">სახელი</span>
+        <input type="text" id="dog-name" name="dog-name" placeholder="მაგ. ჩარლი" required maxlength="40">
+      </label>
+
+      <label class="field">
+        <span class="field-label">ასაკი (წლები)</span>
+        <input type="number" id="dog-age" name="dog-age" placeholder="მაგ. 3" min="0" max="30" step="0.1" required>
+      </label>
+
+      <label class="field">
+        <span class="field-label">ჯიში</span>
+        <input type="text" id="dog-breed" name="dog-breed" placeholder="მაგ. კავალერ კინგ ჩარლზ სპანიელი" required maxlength="60">
+      </label>
+
+      <label class="field">
+        <span class="field-label">სქესი</span>
+        <select id="dog-gender" name="dog-gender" required>
+          <option value="" disabled selected>აირჩიეთ</option>
+          <option value="male">მამრი</option>
+          <option value="female">მდედრი</option>
+        </select>
+      </label>
+
+      <label class="field field-photo">
+        <span class="field-label">პროფილის ფოტო (არასავალდებულო)</span>
+        <input type="file" id="dog-photo-input" name="dog-photo" accept="image/*">
+        <span class="field-hint"><svg viewBox="0 0 24 24" class="icon-svg hint-icon icon-camera"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1-2h7l1 2h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/><circle cx="12" cy="12.5" r="3.4" stroke="currentColor" stroke-width="1.5" fill="none"/><circle class="camera-glint" cx="17" cy="9.7" r="0.5" fill="currentColor"/></svg><span class="field-hint-text" data-default="აირჩიეთ ფოტო გალერეიდან">აირჩიეთ ფოტო გალერეიდან</span></span>
+      </label>
+    </fieldset>
+
+    <button type="submit" class="btn-primary">რეგისტრაციის დასრულება</button>
+  </form>
+</div>
+</main>
+
+<!-- ============ MAIN APP VIEW ============ -->
+<div id="app-view" class="view app-view is-hidden">
+
+  <!-- Single, premium iOS "contact card" style header. Renders the dog's
+       photo, name and key stats exactly once — no duplicate profile card
+       further down the dashboard. -->
+  <header class="dog-card">
+    <figure class="dog-card-avatar" id="header-avatar-figure">
+      <img id="header-avatar-img" src="" alt="ძაღლის ფოტო" class="dog-card-avatar-img is-hidden">
+      <span id="header-avatar-fallback" class="dog-card-avatar-fallback">
+        <svg viewBox="0 0 24 24" class="icon-svg icon-paw"><path d="M12 13.6c-2.5 0-4.6 2.1-4.6 4.9 0 1.9 1.4 3.3 3 3.3.9 0 1.6-.4 1.6-.4s.7.4 1.6.4c1.6 0 3-1.4 3-3.3 0-2.8-2.1-4.9-4.6-4.9Z" fill="currentColor"/><ellipse cx="6.3" cy="9.4" rx="1.8" ry="2.3" fill="currentColor"/><ellipse cx="10.1" cy="6.3" rx="1.8" ry="2.4" fill="currentColor"/><ellipse cx="13.9" cy="6.3" rx="1.8" ry="2.4" fill="currentColor"/><ellipse cx="17.7" cy="9.4" rx="1.8" ry="2.3" fill="currentColor"/></svg>
+      </span>
+    </figure>
+    <hgroup class="dog-card-info">
+      <h1 id="header-dog-name">—</h1>
+      <p id="header-dog-sub">—</p>
+    </hgroup>
+    <dl class="dog-card-chip">
+      <dt class="visually-hidden">სქესი</dt>
+      <dd id="stat-gender">—</dd>
+    </dl>
+    <button type="button" class="theme-toggle-btn" id="theme-toggle-btn" aria-pressed="false" aria-label="ბნელი/ღია რეჟიმის გადართვა" title="ბნელი/ღია რეჟიმი">
+      <span class="theme-toggle-icon theme-toggle-icon--sun" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="icon-svg"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.5v2.6M12 18.9v2.6M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12h2.6M18.9 12h2.6M4.2 19.8 6 18M18 6l1.8-1.8"/></g></svg>
+      </span>
+      <span class="theme-toggle-icon theme-toggle-icon--moon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="icon-svg"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.6 6.6 0 0 0 10.5 10.5Z" fill="currentColor"/></svg>
+      </span>
+    </button>
+  </header>
+
+  <!-- ---- DASHBOARD ---- -->
+  <section id="tab-dashboard" class="tab-panel">
+
+    <!-- Weekly Rhythm — donut + streak, derived live from routine entries -->
+    <section class="section-block rhythm-block">
+      <div class="rhythm-header">
+        <h2 class="section-title">კვირის რიტმი</h2>
+        <p class="rhythm-sub">ბოლო 7 დღე, როცა კვება და გასეირნება ორივე იყო აღნიშნული</p>
+      </div>
+      <div class="rhythm-content">
+        <div class="rhythm-ring-wrap">
+          <svg viewBox="0 0 120 120" class="rhythm-ring" aria-hidden="true">
+            <circle cx="60" cy="60" r="52" class="rhythm-ring-track"></circle>
+            <circle cx="60" cy="60" r="52" class="rhythm-ring-progress" id="rhythm-ring-progress"></circle>
+          </svg>
+          <div class="rhythm-ring-label">
+            <span class="rhythm-percent" id="rhythm-percent">0%</span>
+            <span class="rhythm-percent-caption">სისრულე</span>
+          </div>
+        </div>
+        <div class="rhythm-stats">
+          <div class="rhythm-stat">
+            <span class="rhythm-stat-value" id="rhythm-streak">0</span>
+            <span class="rhythm-stat-label">დღიანი სტრიკი</span>
+          </div>
+          <div class="rhythm-stat">
+            <span class="rhythm-stat-value" id="rhythm-days">0/7</span>
+            <span class="rhythm-stat-label">სრული დღე</span>
+          </div>
+        </div>
+      </div>
+      <ol class="rhythm-week" id="rhythm-week" aria-label="ბოლო 7 დღის მიმოხილვა"></ol>
+    </section>
+
+    <section class="section-block">
+      <h2 class="section-title">დღევანდელი რუტინა</h2>
+      <form id="routine-form" class="routine-form">
+        <fieldset class="routine-fieldset">
+          <legend class="visually-hidden">რუტინის ტიპი</legend>
+          <label class="radio-pill">
+            <input type="radio" name="routine-type" value="feeding" checked>
+            <span><svg viewBox="0 0 24 24" class="icon-svg icon-feeding"><path d="M4 13.5c0 3.6 3.6 6.3 8 6.3s8-2.7 8-6.3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><ellipse cx="12" cy="13.5" rx="8" ry="2.7" stroke="currentColor" stroke-width="1.6" fill="none"/><path class="steam-1" d="M9.5 9c-.6-1 .6-1.6 0-2.6" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/><path class="steam-2" d="M12.4 8.4c-.6-1 .6-1.6 0-2.6" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/><path class="steam-3" d="M15.2 9c-.6-1 .6-1.6 0-2.6" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg> კვება</span>
+          </label>
+          <label class="radio-pill">
+            <input type="radio" name="routine-type" value="walk">
+            <span><svg viewBox="0 0 24 24" class="icon-svg icon-walk"><path d="M12 13.6c-2.2 0-4.1 1.9-4.1 4.4 0 1.7 1.2 2.9 2.6 2.9.8 0 1.5-.3 1.5-.3s.7.3 1.5.3c1.4 0 2.6-1.2 2.6-2.9 0-2.5-1.9-4.4-4.1-4.4Z" stroke="currentColor" stroke-width="1.5" fill="none"/><ellipse cx="7.3" cy="10" rx="1.5" ry="2" stroke="currentColor" stroke-width="1.4" fill="none"/><ellipse cx="10.4" cy="7.6" rx="1.5" ry="2" stroke="currentColor" stroke-width="1.4" fill="none"/><ellipse cx="13.6" cy="7.6" rx="1.5" ry="2" stroke="currentColor" stroke-width="1.4" fill="none"/><ellipse cx="16.7" cy="10" rx="1.5" ry="2" stroke="currentColor" stroke-width="1.4" fill="none"/><circle class="step s1" cx="3" cy="19.2" r="1" fill="currentColor"/><circle class="step s2" cx="6" cy="20" r="1" fill="currentColor"/><circle class="step s3" cx="9.5" cy="19.4" r="1" fill="currentColor"/></svg> გასეირნება</span>
+          </label>
+        </fieldset>
+        <label class="field">
+          <span class="field-label">შენიშვნა</span>
+          <input type="text" id="routine-note" placeholder="მაგ. საუზმე, 200გრ" maxlength="80">
+        </label>
+        <button type="submit" class="btn-secondary">დამატება</button>
+      </form>
+
+      <ul id="routine-list" class="entry-list"></ul>
+      <p id="routine-empty" class="empty-state">დღეს ჯერ არაფერია დამატებული. დაამატეთ პირველი ჩანაწერი ზემოთ.</p>
+    </section>
+  </section>
+
+  <!-- ---- HEALTH ---- -->
+  <section id="tab-health" class="tab-panel is-hidden">
+
+    <!-- Weight tracking — one entry per calendar day. Resubmitting the
+         same date updates that day's entry rather than duplicating it. -->
+    <section class="section-block weight-block">
+      <h2 class="section-title">წონის კონტროლი</h2>
+
+      <div class="weight-summary">
+        <div class="weight-current">
+          <span class="weight-current-value" id="weight-current-value">—</span>
+          <span class="weight-current-unit">კგ</span>
+        </div>
+        <div class="weight-delta" id="weight-delta">
+          <span class="weight-delta-text">ჯერ არ არის ჩანაწერი</span>
+        </div>
+        <svg viewBox="0 0 240 56" class="weight-sparkline" id="weight-sparkline" preserveAspectRatio="none" aria-hidden="true">
+          <polyline id="weight-sparkline-line" points="" fill="none" stroke="url(#rhythmGradient)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          <circle id="weight-sparkline-dot" cx="0" cy="0" r="3.4" fill="var(--accent-2)"></circle>
+        </svg>
+      </div>
+
+      <form id="weight-form" class="weight-form">
+        <label class="field">
+          <span class="field-label">თარიღი</span>
+          <input type="date" id="weight-date" required>
+        </label>
+        <label class="field">
+          <span class="field-label">წონა (კგ)</span>
+          <input type="number" id="weight-value" placeholder="მაგ. 12.4" min="0" max="120" step="0.1" required>
+        </label>
+        <button type="submit" class="btn-secondary">დღის წონის შენახვა</button>
+      </form>
+
+      <ul id="weight-list" class="entry-list weight-list"></ul>
+      <p id="weight-empty" class="empty-state">წონის ჩანაწერები ჯერ არ არის დამატებული. დაამატეთ დღევანდელი წონა ზემოთ.</p>
+    </section>
+
+    <section class="section-block">
+      <h2 class="section-title">ჯანმრთელობის ჩანაწერი</h2>
+      <form id="health-form" class="health-form">
+        <label class="field">
+          <span class="field-label">ტიპი</span>
+          <select id="health-type" required>
+            <option value="analysis">ანალიზი</option>
+            <option value="vaccination">აცრა</option>
+            <option value="document">დოკუმენტი</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">სათაური</span>
+          <input type="text" id="health-title" placeholder="მაგ. სისხლის საერთო ანალიზი" required maxlength="80">
+        </label>
+        <label class="field">
+          <span class="field-label">თარიღი</span>
+          <input type="date" id="health-date" required>
+        </label>
+        <label class="field">
+          <span class="field-label">შენიშვნა</span>
+          <input type="text" id="health-note" placeholder="დამატებითი დეტალები" maxlength="120">
+        </label>
+        <label class="field field-photo">
+          <span class="field-label">დოკუმენტის/ანალიზის ფოტო</span>
+          <input type="file" id="health-file-input" accept="image/*">
+          <span class="field-hint"><svg viewBox="0 0 24 24" class="icon-svg hint-icon icon-camera"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1-2h7l1 2h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/><circle cx="12" cy="12.5" r="3.4" stroke="currentColor" stroke-width="1.5" fill="none"/><circle class="camera-glint" cx="17" cy="9.7" r="0.5" fill="currentColor"/></svg><span class="field-hint-text" data-default="აირჩიეთ ან გადაიღეთ">აირჩიეთ ან გადაიღეთ</span></span>
+        </label>
+        <button type="submit" class="btn-secondary">შენახვა</button>
+      </form>
+
+      <ul id="health-list" class="entry-list health-list"></ul>
+      <p id="health-empty" class="empty-state">ჯანმრთელობის ჩანაწერები ჯერ არ არის დამატებული.</p>
+    </section>
+  </section>
+
+  <!-- ---- MEMORIES ---- -->
+  <section id="tab-memories" class="tab-panel is-hidden">
+    <section class="section-block">
+      <h2 class="section-title">მოგონებები</h2>
+      <form id="memory-form" class="memory-form">
+        <label class="field field-photo field-capture">
+          <span class="field-label">გადაიღეთ ან აირჩიეთ ფოტო</span>
+          <input type="file" id="memory-photo-input" accept="image/*" capture="environment" required>
+          <span class="field-hint"><svg viewBox="0 0 24 24" class="icon-svg hint-icon icon-camera"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1-2h7l1 2h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/><circle cx="12" cy="12.5" r="3.4" stroke="currentColor" stroke-width="1.5" fill="none"/><circle class="camera-glint" cx="17" cy="9.7" r="0.5" fill="currentColor"/></svg><span class="field-hint-text" data-default="კამერა ან გალერეა">კამერა ან გალერეა</span></span>
+        </label>
+        <label class="field">
+          <span class="field-label">წარწერა</span>
+          <input type="text" id="memory-caption" placeholder="მაგ. პირველი გასეირნება პარკში" maxlength="100">
+        </label>
+        <button type="submit" class="btn-secondary">გალერეაში დამატება</button>
+      </form>
+
+      <div id="memories-grid" class="memories-grid"></div>
+      <p id="memories-empty" class="empty-state">გალერეა ცარიელია. დაამატეთ პირველი მოგონება ზემოთ.</p>
+    </section>
+  </section>
+
+  <!-- ---- SETTINGS ---- -->
+  <section id="tab-settings" class="tab-panel is-hidden">
+    <section class="section-block">
+      <h2 class="section-title">პარამეტრები</h2>
+
+      <details class="settings-card" open>
+        <summary>მონაცემების სარეზერვო ასლი</summary>
+        <p class="settings-desc">ჩამოტვირთეთ თქვენი ძაღლის მთელი ისტორია — პროფილი, რუტინა, ჯანმრთელობის ჩანაწერები და მოგონებები — ერთ ფაილში.</p>
+        <button type="button" id="export-btn" class="btn-primary">მონაცემების ექსპორტი</button>
+      </details>
+
+      <details class="settings-card">
+        <summary>პროფილის რედაქტირება</summary>
+        <p class="settings-desc">შეცვალეთ ძაღლის ძირითადი მონაცემები.</p>
+        <form id="edit-profile-form" class="onboarding-form">
+          <label class="field">
+            <span class="field-label">სახელი</span>
+            <input type="text" id="edit-dog-name" maxlength="40" required>
+          </label>
+          <label class="field">
+            <span class="field-label">ასაკი (წლები)</span>
+            <input type="number" id="edit-dog-age" min="0" max="30" step="0.1" required>
+          </label>
+          <label class="field">
+            <span class="field-label">ჯიში</span>
+            <input type="text" id="edit-dog-breed" maxlength="60" required>
+          </label>
+          <label class="field">
+            <span class="field-label">სქესი</span>
+            <select id="edit-dog-gender" required>
+              <option value="male">მამრი</option>
+              <option value="female">მდედრი</option>
+            </select>
+          </label>
+          <button type="submit" class="btn-secondary">ცვლილებების შენახვა</button>
+        </form>
+      </details>
+
+      <details class="settings-card settings-card-danger">
+        <summary>საშიში ზონა</summary>
+        <p class="settings-desc">ეს მოქმედება სამუდამოდ წაშლის ყველა შენახულ მონაცემს ამ მოწყობილობიდან.</p>
+        <button type="button" id="reset-btn" class="btn-danger">ყველა მონაცემის წაშლა</button>
+      </details>
+    </section>
+  </section>
+
+  <nav class="bottom-nav" aria-label="მთავარი ნავიგაცია">
+    <span class="nav-indicator" id="nav-indicator" aria-hidden="true"></span>
+    <button type="button" class="nav-btn is-active" data-tab="dashboard">
+      <span class="nav-icon-stack">
+        <svg viewBox="0 0 24 24" fill="none" class="nav-icon nav-icon-regular"><path d="M4.5 11 12 4.5 19.5 11" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 9.8V18a1 1 0 0 0 1 1H10v-4.4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V19h2.5a1 1 0 0 0 1-1V9.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 24 24" class="nav-icon nav-icon-filled"><path d="M12 3.4 3.4 10.9a1 1 0 0 0-.4.8V19a1.6 1.6 0 0 0 1.6 1.6H9V14.6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V20.6h4.4A1.6 1.6 0 0 0 21 19v-7.3a1 1 0 0 0-.4-.8L12 3.4Z" fill="currentColor"/></svg>
+      </span>
+      <span class="nav-label">მთავარი</span>
+    </button>
+    <button type="button" class="nav-btn" data-tab="health">
+      <span class="nav-icon-stack">
+        <svg viewBox="0 0 24 24" fill="none" class="nav-icon nav-icon-regular"><path d="M12 19.7s-6.6-4-6.6-9a4 4 0 0 1 6.6-3 4 4 0 0 1 6.6 3c0 5-6.6 9-6.6 9Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 24 24" class="nav-icon nav-icon-filled"><path d="M12 19.7s-6.6-4-6.6-9a4 4 0 0 1 6.6-3 4 4 0 0 1 6.6 3c0 5-6.6 9-6.6 9Z" fill="currentColor"/></svg>
+      </span>
+      <span class="nav-label">ჯანმრთელობა</span>
+    </button>
+    <button type="button" class="nav-btn" data-tab="memories">
+      <span class="nav-icon-stack">
+        <svg viewBox="0 0 24 24" fill="none" class="nav-icon nav-icon-regular"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.6"/><circle cx="8.5" cy="9" r="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M5 17 9 11 12 14 15 9.5 19 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 24 24" class="nav-icon nav-icon-filled"><path fill-rule="evenodd" clip-rule="evenodd" d="M7 4H17A3 3 0 0 1 20 7V17A3 3 0 0 1 17 20H7A3 3 0 0 1 4 17V7A3 3 0 0 1 7 4Z M8.5 9m-1.6 0a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0Z M5 17L9 11L12 14L15 9.5L19 17Z" fill="currentColor"/></svg>
+      </span>
+      <span class="nav-label">მოგონებები</span>
+    </button>
+    <button type="button" class="nav-btn" data-tab="settings">
+      <span class="nav-icon-stack">
+        <svg viewBox="0 0 24 24" fill="none" class="nav-icon nav-icon-regular"><path d="M9.9 4.2h4.2l.5 2.4a7 7 0 0 1 1.8 1l2.3-.8 2.1 3.6-1.8 1.6a7 7 0 0 1 0 2l1.8 1.6-2.1 3.6-2.3-.8a7 7 0 0 1-1.8 1l-.5 2.4H9.9l-.5-2.4a7 7 0 0 1-1.8-1l-2.3.8-2.1-3.6 1.8-1.6a7 7 0 0 1 0-2L3.2 10l2.1-3.6 2.3.8a7 7 0 0 1 1.8-1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>
+        <svg viewBox="0 0 24 24" class="nav-icon nav-icon-filled"><path fill-rule="evenodd" clip-rule="evenodd" d="M9.9 4.2h4.2l.5 2.4a7 7 0 0 1 1.8 1l2.3-.8 2.1 3.6-1.8 1.6a7 7 0 0 1 0 2l1.8 1.6-2.1 3.6-2.3-.8a7 7 0 0 1-1.8 1l-.5 2.4H9.9l-.5-2.4a7 7 0 0 1-1.8-1l-2.3.8-2.1-3.6 1.8-1.6a7 7 0 0 1 0-2L3.2 10l2.1-3.6 2.3.8a7 7 0 0 1 1.8-1Z M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z" fill="currentColor"/></svg>
+      </span>
+      <span class="nav-label">პარამეტრები</span>
+    </button>
+  </nav>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
