@@ -1,0 +1,10 @@
+{
+  "name": "PetLog — შენი ძაღლის სივრცე",
+  "short_name": "PetLog",
+  "description": "ძაღლის ყოველდღიური ზრუნვა ერთ სივრცეში",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#7f56d9",
+  "icons": [{ "src": "/app-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }]
+}

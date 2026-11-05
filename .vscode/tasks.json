@@ -1,0 +1,25 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "PetLog build",
+			"type": "shell",
+			"command": "OPENSSL_CONF=/dev/null node node_modules/typescript/bin/tsc --noEmit && OPENSSL_CONF=/dev/null node node_modules/vite/bin/vite.js build",
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "PetLog typecheck",
+			"type": "shell",
+			"command": "OPENSSL_CONF=/dev/null node node_modules/typescript/bin/tsc --noEmit",
+			"problemMatcher": []
+		},
+		{
+			"label": "PetLog server",
+			"type": "shell",
+			"command": "PORT=4173 OPENSSL_CONF=/dev/null node server.ts",
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}
