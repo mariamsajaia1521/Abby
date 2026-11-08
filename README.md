@@ -7,12 +7,34 @@
 პროექტი დაკავშირებულია მომხმარებლის მოწოდებულ Supabase პროექტთან. ბრაუზერში გამოიყენება მხოლოდ საჯარო publishable key; პირად მონაცემებს RLS იცავს. სერვისის ადმინისტრატორის გასაღები აპში არ გამოიყენება.
 
 1. Supabase Dashboard → **SQL Editor** → **New query**. ჩასვით და გაუშვით [supabase/schema.sql](./supabase/schema.sql) **სრულად**. ეს არის ზუსტი, გასაშვები SQL: ქმნის ცხრილებს, მფლობელისა და დადასტურებული ელფოსტის RLS წესებს, დახურულ `pet-media` საცავს, ვაუჩერის გაცემის / განაღდების ფუნქციებსა და GPS მანძილის გადამოწმებას. საცავი და ავტორიზაციის სტანდარტული სქემები Supabase-ის მიერ უნდა იყოს შექმნილი.
-2. **Authentication → Providers → Email**: ჩართეთ Email provider, Sign up და **Confirm email**. მოწოდებულ პროექტზე შემოწმებისას `mailer_autoconfirm` გამორთულია, რაც სწორია. Email OTP length დააყენეთ **6**-ზე.
+2. **Authentication → Sign In / Providers → Email**: ჩართეთ Email provider, Sign up და **Confirm email**. Email OTP length დააყენეთ **6**-ზე; პროექტში თავდაპირველად 8 იყო მითითებული.
 3. **Authentication → URL Configuration**: Site URL — `https://mariamsajaia1521.github.io/Abby/`. Redirect URLs-ში დაამატეთ იგივე მისამართი და ლოკალური განვითარებისას `http://127.0.0.1:5173/` და `http://127.0.0.1:4173/`.
-4. **Authentication → Email Templates → Confirm signup**: წერილი უნდა შეიცავდეს როგორც 6-ნიშნა `{{ .Token }}`-ს, ისე `{{ .ConfirmationURL }}` ბმულს. მზა ქართული წერილია [supabase/confirm-signup.html](./supabase/confirm-signup.html). კოდი ხელმისაწვდომია სხვა მოწყობილობაზეც; PKCE ბმული გახსენით რეგისტრაციის იმავე ბრაუზერში.
-5. საწარმოო რეგისტრაციებისთვის გამართეთ თქვენი **Custom SMTP**, გამგზავნის დომენი და Supabase-ის rate limit-ები. Supabase-ის სატესტო გამგზავნმა შეიძლება წერილები მხოლოდ გუნდის წევრების მისამართებზე გააგზავნოს.
+4. **Authentication → Emails → SMTP Settings**: დააკავშირეთ **Custom SMTP**. ამ უფასო პროექტში წერილის სათაურისა და შიგთავსის შეცვლა SMTP-ის დაკავშირების შემდეგ იხსნება. ქვემოთ მოცემულია უფასო Gmail კავშირის ნაბიჯები. SMTP-ის შეერთებამდე Supabase იყენებს თავის სტანდარტულ წერილს, რომელიც მხოლოდ დადასტურების ბმულს შეიცავს.
+5. **Authentication → Emails → Templates → Confirm sign up**: SMTP-ის შენახვის შემდეგ ჩასვით [მზა ქართული წერილი](./supabase/confirm-signup.html). წერილი შეიცავს როგორც 6-ნიშნა `{{ .Token }}`-ს, ისე `{{ .ConfirmationURL }}` ბმულს. კოდი ხელმისაწვდომია სხვა მოწყობილობაზეც; PKCE ბმული გახსენით რეგისტრაციის იმავე ბრაუზერში. სათაური: `დაადასტურე შენი ელფოსტა — PetLog`.
 
 არსებული SQL მონაცემები არ იშლება. არცერთი გამოგონილი ცხოველი, აცრა, კონტაქტი, მოგონება ან პარტნიორის შეთავაზება არ იქმნება. პროფილის ავტომატური შექმნისას ინახება მხოლოდ რეალური Auth მომხმარებლის ID და ცარიელი სახელი.
+
+## უფასო Gmail SMTP კავშირი
+
+ეს ვარიანტი იყენებს თქვენს არსებულ Gmail ანგარიშს; დამატებითი დომენი არ სჭირდება. მასზე ვრცელდება [Gmail-ის გაგზავნის დღიური ლიმიტები](https://support.google.com/mail/answer/22839?hl=en). Supabase-ის SMTP ფორმაც მიუთითებს, რომ Gmail პირადი წერილებისთვისაა განკუთვნილი და მიწოდება შეიძლება განსხვავდებოდეს სპეციალიზებული ტრანზაქციული სერვისისგან.
+
+1. Google Account → **Security → 2-Step Verification** ჩართეთ. შემდეგ გახსენით [App Passwords](https://myaccount.google.com/apppasswords), აპის სახელად ჩაწერეთ `PetLog` და შექმენით ცალკე პაროლი. [Google-ის ოფიციალური ინსტრუქცია](https://support.google.com/accounts/answer/185833?hl=en) განმარტავს საჭირო პირობებსა და შემთხვევებს, როცა App Passwords მიუწვდომელია.
+2. Supabase-ის **Authentication → Emails → SMTP Settings** გვერდზე ჩართეთ **Enable custom SMTP** და შეავსეთ:
+
+| ველი | მნიშვნელობა |
+| --- | --- |
+| Sender email address | თქვენი რეალური Gmail მისამართი |
+| Sender name | `PetLog` |
+| Host | `smtp.gmail.com` |
+| Port number | `587` |
+| Username | იგივე სრული Gmail მისამართი |
+| Password | Google-ში ახლად შექმნილი 16-სიმბოლოიანი App Password, გამოტოვებების გარეშე |
+
+SMTP-ის ჰოსტისა და პორტის [Google-ის ინსტრუქცია](https://support.google.com/mail/answer/7104828).
+
+3. App Password შეიყვანეთ უშუალოდ Supabase-ის **Password** ველში და შეინახეთ **Save changes**-ით. ჩვეულებრივი Google პაროლი აქ არ გამოიყენება; SMTP პაროლი კოდში, GitHub-ში ან frontend გარემოს ცვლადებში არ ინახება.
+4. დაბრუნდით **Templates → Confirm sign up** გვერდზე, შეინახეთ ქართული სათაური და [წერილის შიგთავსი](./supabase/confirm-signup.html).
+5. აპში დააჭირეთ **ხელახლა გაგზავნა**, რათა მიიღოთ უკვე ახალი პარამეტრებით შედგენილი წერილი. დადასტურების შემდეგ ცარიელ ანგარიშში პირველი მეგობრის დამატება დაიწყება.
 
 ## გაშვება
 
