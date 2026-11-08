@@ -412,7 +412,7 @@ export function HealthPage({ entries, weights, saveEntries, saveWeights, notify,
         {records.length > 0 ? <div className="record-list">{records.map(item => {
           const Icon = healthIcons[item.type] || ClipboardList;
           return <article key={item.id} className="record-row flex flex-wrap !items-start gap-3 sm:flex-nowrap sm:gap-4">
-            <span className="record-type-icon inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f9f5ff] text-[#7f56d9]"><Icon size={20} aria-hidden="true"/></span>
+            <span className="record-type-icon inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f8fc] text-[#5661d5]"><Icon size={20} aria-hidden="true"/></span>
             <div className="record-content min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2"><span className="badge">{healthLabels[item.type] || item.type}</span><time className="record-date muted text-sm" dateTime={item.date}>{fullDate(item.date)}</time></div>
               <h3 className="mt-2 break-words font-semibold [overflow-wrap:anywhere]">{item.title || 'სამედიცინო დოკუმენტი'}</h3>
@@ -425,7 +425,7 @@ export function HealthPage({ entries, weights, saveEntries, saveWeights, notify,
             </div>
           </article>;
         })}</div> : <div className="empty-state">
-          <span className="empty-state-icon mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f9f5ff] text-[#7f56d9]"><ClipboardList size={26} aria-hidden="true"/></span>
+          <span className="empty-state-icon mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f7f8fc] text-[#5661d5]"><ClipboardList size={26} aria-hidden="true"/></span>
           <h3 className="font-semibold">{entries.length ? 'შესაბამისი ჩანაწერი ვერ მოიძებნა' : 'ზრუნვის ისტორია აქ იწყება'}</h3>
           <p className="muted mx-auto mt-2 max-w-md leading-7">{entries.length ? 'შეცვალეთ საძიებო სიტყვა ან კატეგორია, რომ საჭირო ჩანაწერი იპოვოთ.' : 'შეინახეთ პირველი ვიზიტი, ვაქცინაცია ან გამოკვლევის შედეგი, რომ მნიშვნელოვანი ინფორმაცია ყოველთვის ხელთ გქონდეთ.'}</p>
           <button className="btn btn-secondary mt-5" type="button" disabled={busy || imageBusy} onClick={entries.length ? () => { setQuery(''); setCategory('all'); } : openRecord}>{entries.length ? 'ფილტრების გასუფთავება' : <><Plus size={18} aria-hidden="true"/> პირველი ჩანაწერის დამატება</>}</button>
@@ -451,13 +451,13 @@ export function HealthPage({ entries, weights, saveEntries, saveWeights, notify,
         <div className="panel-heading mb-5 flex flex-wrap items-end justify-between gap-3"><div><h2 id={`${id}-weights-title`} ref={activeTab === 'weights' ? listHeadingRef : undefined} tabIndex={-1} className="section-title">წონის ისტორია</h2><p className="muted mt-2 text-sm">{weights.length ? 'ყველა გაზომვა თარიღის მიხედვით, უახლესიდან.' : 'გაზომვები დაგეხმარებათ წონის ცვლილების დაკვირვებაში.'}</p></div><span className="muted text-sm">{weights.length} გაზომვა</span></div>
         {chartWeights.length >= 2 && <WeightChart weights={chartWeights}/>}
         {sortedWeights.length > 0 ? <>
-          {chartWeights.length < 2 && <p className="muted mb-4 rounded-xl bg-[#f9f5ff] p-4 text-sm leading-7">წონის გრაფიკი გამოჩნდება მინიმუმ ორი დათარიღებული გაზომვის დამატების შემდეგ.</p>}
+          {chartWeights.length < 2 && <p className="muted mb-4 rounded-xl bg-[#f7f8fc] p-4 text-sm leading-7">წონის გრაფიკი გამოჩნდება მინიმუმ ორი დათარიღებული გაზომვის დამატების შემდეგ.</p>}
           <div className="record-list">{sortedWeights.map(item => <article key={item.id} className="record-row flex flex-wrap gap-3 sm:flex-nowrap sm:gap-4">
-            <span className="record-type-icon inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f9f5ff] text-[#7f56d9]"><WeightIcon size={20} aria-hidden="true"/></span>
+            <span className="record-type-icon inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f8fc] text-[#5661d5]"><WeightIcon size={20} aria-hidden="true"/></span>
             <div className="record-content min-w-0 flex-1"><h3 className="font-semibold">{item.weightKg} კგ</h3><time className="record-date muted mt-1 block text-sm" dateTime={item.date}>{fullDate(item.date)}</time></div>
             <div className="record-actions flex w-full justify-end gap-1 sm:w-auto"><button className={iconClass} type="button" disabled={busy} aria-label={`${fullDate(item.date)}, ${item.weightKg} კგ — რედაქტირება`} title="რედაქტირება" onClick={() => editWeight(item)}><Pencil size={18} aria-hidden="true"/></button><button className={iconClass} type="button" disabled={busy} aria-label={`${fullDate(item.date)}, ${item.weightKg} კგ — წაშლა`} title="წაშლა" onClick={() => { setDeleteError(''); setDeleting({ kind: 'weight', id: item.id }); }}><Trash2 size={18} aria-hidden="true"/></button></div>
           </article>)}</div>
-        </> : <div className="empty-state"><span className="empty-state-icon mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f9f5ff] text-[#7f56d9]"><WeightIcon size={26} aria-hidden="true"/></span><h3 className="font-semibold">დაამატეთ პირველი გაზომვა</h3><p className="muted mx-auto mt-2 max-w-md leading-7">შეინახეთ წონა და გაზომვის თარიღი. ორი გაზომვის შემდეგ აქ ცვლილების გრაფიკიც გამოჩნდება.</p><button className="btn btn-secondary mt-5" type="button" disabled={busy} onClick={openWeight}><Plus size={18} aria-hidden="true"/> წონის დამატება</button></div>}
+        </> : <div className="empty-state"><span className="empty-state-icon mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f7f8fc] text-[#5661d5]"><WeightIcon size={26} aria-hidden="true"/></span><h3 className="font-semibold">დაამატეთ პირველი გაზომვა</h3><p className="muted mx-auto mt-2 max-w-md leading-7">შეინახეთ წონა და გაზომვის თარიღი. ორი გაზომვის შემდეგ აქ ცვლილების გრაფიკიც გამოჩნდება.</p><button className="btn btn-secondary mt-5" type="button" disabled={busy} onClick={openWeight}><Plus size={18} aria-hidden="true"/> წონის დამატება</button></div>}
       </section>
     </section>
 
@@ -645,7 +645,7 @@ export function PlanPage({ reminders, save, notify, intent, onIntentHandled }: {
           const overdue = item.status === 'open' && item.date < currentDate;
           const isToday = item.status === 'open' && item.date === currentDate;
           return <article key={item.id} className="record-row flex flex-wrap !items-start gap-3 sm:flex-nowrap sm:gap-4">
-            <span className="record-type-icon inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f9f5ff] text-[#7f56d9]">{item.status === 'done' ? <Check size={20} aria-hidden="true"/> : <CalendarDays size={20} aria-hidden="true"/>}</span>
+            <span className="record-type-icon inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f7f8fc] text-[#5661d5]">{item.status === 'done' ? <Check size={20} aria-hidden="true"/> : <CalendarDays size={20} aria-hidden="true"/>}</span>
             <div className="record-content min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2"><span className="badge">{reminderLabels[item.category]}</span>{item.status === 'done' && <span className="badge" data-tone="success">შესრულებულია</span>}{overdue && <span className="badge" data-tone="warm">ვადაგადაცილებული</span>}{isToday && <span className="badge" data-tone="warm">დღეს</span>}</div>
               <h3 className="mt-2 break-words font-semibold [overflow-wrap:anywhere]">{item.title}</h3>
@@ -659,7 +659,7 @@ export function PlanPage({ reminders, save, notify, intent, onIntentHandled }: {
             </div>
           </article>;
         })}</div> : <div className="empty-state">
-          <span className="empty-state-icon mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f9f5ff] text-[#7f56d9]"><CalendarDays size={26} aria-hidden="true"/></span>
+          <span className="empty-state-icon mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f7f8fc] text-[#5661d5]"><CalendarDays size={26} aria-hidden="true"/></span>
           <h3 className="font-semibold">{hasFilters ? 'შესაბამისი შეხსენება ვერ მოიძებნა' : filter === 'done' ? 'შესრულებული შეხსენებები ჯერ არ არის' : counts.done && filter === 'open' ? 'ყველა დაგეგმილი საქმე შესრულებულია' : 'დაგეგმეთ შემდეგი ნაბიჯი'}</h3>
           <p className="muted mx-auto mt-2 max-w-md leading-7">{hasFilters ? 'სცადეთ სხვა საძიებო სიტყვა ან კატეგორია.' : filter === 'done' ? 'შეხსენების შესრულებულად მონიშვნის შემდეგ მას აქ იპოვით.' : 'დაამატეთ მომდევნო ვიზიტი, ვაქცინაცია ან მოვლის სხვა მნიშვნელოვანი თარიღი.'}</p>
           {hasFilters ? <button className="btn btn-secondary mt-5" type="button" onClick={() => { setQuery(''); setCategoryFilter('all'); }}>ფილტრების გასუფთავება</button> : filter === 'done' ? <button className="btn btn-secondary mt-5" type="button" onClick={() => setFilter('open')}>დაგეგმილი შეხსენებები</button> : <button className="btn btn-secondary mt-5" type="button" disabled={busy} onClick={openForm}><Plus size={18} aria-hidden="true"/> შეხსენების დამატება</button>}

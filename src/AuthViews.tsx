@@ -7,12 +7,15 @@ import type { Dog, State, User } from './types';
 function WelcomePanel() {
   return <aside className="auth-aside" aria-labelledby="auth-aside-title">
     <div className="auth-aside-content">
-      <h2 id="auth-aside-title" className="section-title">შენი ძაღლის ჩანაწერები</h2>
+      <span className="auth-aside-label">PetLog Workspace</span>
+      <h2 id="auth-aside-title" className="section-title">ჯანმრთელობის ისტორია.<br/>საჭირო ინფორმაცია, საჭირო დროს.</h2>
+      <p className="auth-aside-description">ჩანაწერები, კონტაქტები და დაგეგმილი ზრუნვა — შენი მეგობრის პირად სივრცეში.</p>
       <ul className="auth-benefits">
         <li><CheckCircle size={20} aria-hidden="true"/><span>ვიზიტებისა და აცრების ისტორია</span></li>
         <li><CheckCircle size={20} aria-hidden="true"/><span>მოვლის გეგმები და შეხსენებები</span></li>
         <li><CheckCircle size={20} aria-hidden="true"/><span>წონის ცვლილების ისტორია</span></li>
       </ul>
+      <p className="auth-aside-caption">ყველა ჩანაწერი ერთ ანგარიშში.</p>
     </div>
   </aside>;
 }

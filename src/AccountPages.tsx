@@ -17,7 +17,7 @@ export function EmergencyPage({ state, go }: { state: State; go: Navigate }) {
     </div><div className="privacy-note"><ShieldCheck size={17}/><p>გადაამოწმე და განაახლე ეს ინფორმაცია რეგულარულად.</p></div></div>;
 }
 
-export function SettingsPage({ user, state, restore, reset, logout, notify, demo }: { user: User; state: State; restore: (state: State) => Promise<void>; reset: () => Promise<void>; logout: () => Promise<void>; notify: (message: string) => void; demo: boolean }) {
+export function SettingsPage({ user, state, restore, reset, logout, notify, demo, previewOnly = false }: { user: User; state: State; restore: (state: State) => Promise<void>; reset: () => Promise<void>; logout: () => Promise<void>; notify: (message: string) => void; demo: boolean; previewOnly?: boolean }) {
   const [activeTab, setActiveTab] = useState<'account' | 'data'>('account');
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<'restore' | 'reset' | null>(null);
@@ -150,12 +150,12 @@ export function SettingsPage({ user, state, restore, reset, logout, notify, demo
 
       <section className="settings-section" aria-labelledby="settings-logout-heading">
         <div className="settings-section-heading">
-          <h2 className="ui-label" id="settings-logout-heading">ანგარიშიდან გასვლა</h2>
-          <p className="field-hint">შემდეგ ხელახლა შეძლებ შესვლას.</p>
+          <h2 className="ui-label" id="settings-logout-heading">{previewOnly ? 'დემოს თავიდან დაწყება' : 'ანგარიშიდან გასვლა'}</h2>
+          <p className="field-hint">{previewOnly ? 'საწყისი სადემონსტრაციო მონაცემების დაბრუნება.' : 'შემდეგ ხელახლა შეძლებ შესვლას.'}</p>
         </div>
         <div className="settings-section-body">
           <button className="btn btn-secondary" disabled={busy} onClick={() => { setBusy(true); void logout().catch(cause => setError(cause instanceof Error ? cause.message : 'გასვლა ვერ მოხერხდა.')).finally(() => setBusy(false)); }}>
-            <LogOut size={16} aria-hidden="true"/> {demo ? 'დემოდან გასვლა' : 'ანგარიშიდან გასვლა'}
+            <LogOut size={16} aria-hidden="true"/> {previewOnly ? 'დემოს თავიდან დაწყება' : demo ? 'დემოდან გასვლა' : 'ანგარიშიდან გასვლა'}
           </button>
         </div>
       </section>

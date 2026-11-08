@@ -358,7 +358,8 @@ const server = createServer(async (req, res) => {
     const file = join(DIST_DIR, asset);
     if (!existsSync(file)) return fail(res, 404, 'ფაილი ვერ მოიძებნა.');
     const contents = await readFile(file);
-    res.writeHead(200, { 'Content-Type': mime[extname(file)] || 'application/octet-stream', 'Cache-Control': asset === 'index.html' ? 'no-cache' : 'public, max-age=31536000, immutable' });
+    const revalidate = asset === 'index.html' || asset === 'sw.js' || asset.endsWith('.webmanifest');
+    res.writeHead(200, { 'Content-Type': mime[extname(file)] || 'application/octet-stream', 'Cache-Control': revalidate ? 'no-cache' : 'public, max-age=31536000, immutable' });
     res.end(req.method === 'HEAD' ? undefined : contents);
   } catch (error) {
     if (error instanceof SyntaxError) return fail(res, 400, 'არასწორი JSON მონაცემები.');
