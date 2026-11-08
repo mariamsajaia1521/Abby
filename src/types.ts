@@ -1,32 +1,117 @@
-import { formatDate } from './dates';
-
-export type Dog = { name: string; breed: string; age: string; gender: 'male' | 'female'; photo?: string; createdAt?: number; species?: string; birthDate?: string; microchip?: string; sterilization?: 'unknown' | 'yes' | 'no'; sterilizationDate?: string; allergies?: string; conditions?: string; emergencyContact?: string };
-export type Vet = { name: string; clinic: string; phone: string; emergencyPhone: string; address: string; email: string; notes: string };
-export type Reminder = { id: string; title: string; category: 'appointment' | 'vaccination' | 'medication' | 'prevention' | 'followup'; date: string; notes: string; status: 'open' | 'done'; recurrence: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'; createdAt: number; anchorDay?: number };
-export type Routine = { id: string; type: 'feeding' | 'walk'; note: string; timestamp: number };
-export type Health = { id: string; type: 'analysis' | 'vaccination' | 'document' | 'visit' | 'medication' | 'prevention' | 'surgery'; title: string; date: string; note: string; photo?: string };
-export type Weight = { id: string; date: string; weightKg: number; timestamp: number };
-export type Memory = { id: string; caption: string; timestamp: number; photo?: string; videoUrl?: string };
-export type WalkSpot = { id: string; name: string; lat: number; lng: number; createdAt: number };
-export type State = {
-  dog: Dog | null;
-  routineEntries: Routine[];
-  healthRecords: Health[];
-  weightEntries: Weight[];
+export type Species = "dog" | "cat";
+export type Gender = "female" | "male";
+export type Mood = "friendly" | "cautious";
+export type Page =
+  "overview" | "health" | "memories" | "club" | "walk" | "profile";
+export type Pet = {
+  id: string;
+  owner_id: string;
+  name: string;
+  species: Species;
+  gender: Gender;
+  breed: string;
+  birth_date: string;
+  weight_kg: number;
+  microchip: string | null;
+  photo_path: string;
+  created_at: string;
+};
+export type PetInput = Omit<
+  Pet,
+  "id" | "owner_id" | "photo_path" | "created_at"
+>;
+export type Vaccination = {
+  id: string;
+  owner_id: string;
+  pet_id: string;
+  name: string;
+  administered_on: string;
+  due_on: string | null;
+  clinic: string;
+  notes: string;
+  created_at: string;
+};
+export type VetContact = {
+  id: string;
+  owner_id: string;
+  pet_id: string;
+  name: string;
+  clinic: string;
+  phone: string;
+  address: string;
+  notes: string;
+  created_at: string;
+};
+export type Memory = {
+  id: string;
+  owner_id: string;
+  pet_id: string;
+  caption: string;
+  photo_path: string;
+  taken_on: string;
+  created_at: string;
+};
+export type Booth = {
+  id: string;
+  name: string;
+  category: "clinic" | "shop";
+  title: string;
+  description: string;
+  image_url: string | null;
+  website: string | null;
+  address: string;
+  offer_label: string;
+  species: Species[];
+  breeds: string[];
+  min_age_months: number;
+  max_age_months: number | null;
+  starts_at: string;
+  expires_at: string | null;
+  is_active: boolean;
+  voucher_limit: number | null;
+};
+export type Voucher = {
+  id: string;
+  owner_id: string;
+  pet_id: string;
+  booth_id: string;
+  code: string;
+  status: "active" | "redeemed" | "cancelled";
+  expires_at: string | null;
+  created_at: string;
+};
+export type RoutePoint = {
+  lat: number;
+  lng: number;
+  timestamp: number;
+  accuracy: number;
+  segment_start?: boolean;
+};
+export type WalkSession = {
+  id: string;
+  owner_id: string;
+  pet_id: string;
+  mood: Mood;
+  started_at: string;
+  ended_at: string | null;
+  route: RoutePoint[];
+  distance_m: number;
+  paw_coins: number;
+};
+export type Profile = { id: string; display_name: string; created_at: string };
+export type PetData = {
+  vaccinations: Vaccination[];
+  vets: VetContact[];
   memories: Memory[];
-  walkSpots: WalkSpot[];
-  vet: Vet | null;
-  reminders: Reminder[];
+  walks: WalkSession[];
+  vouchers: Voucher[];
+  activeWalk: WalkSession | null;
 };
-export type Collection = keyof State;
-export type User = { id: string; email: string };
-export type Page = 'overview' | 'profile' | 'health' | 'plan' | 'vet' | 'emergency' | 'settings';
-export type PageIntent = 'health-record' | 'weight' | 'reminder';
-export type Navigate = (page: Page, intent?: PageIntent) => void;
-export const emptyState = (): State => ({ dog: null, routineEntries: [], healthRecords: [], weightEntries: [], memories: [], walkSpots: [], vet: null, reminders: [] });
-export const uid = () => crypto.randomUUID();
-export const today = () => {
-  const date = new Date();
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
-};
-export const dateLabel = (date: string | number) => formatDate(date, { short: true });
+export const emptyPetData = (): PetData => ({
+  vaccinations: [],
+  vets: [],
+  memories: [],
+  walks: [],
+  vouchers: [],
+  activeWalk: null,
+});

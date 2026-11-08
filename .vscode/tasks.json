@@ -20,6 +20,13 @@
 			"command": "PORT=4173 OPENSSL_CONF=/dev/null node server.ts",
 			"isBackground": true,
 			"problemMatcher": []
+		},
+		{
+			"label": "PetLog local preview",
+			"type": "shell",
+			"command": "OPENSSL_CONF=/dev/null node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173",
+			"isBackground": true,
+			"problemMatcher": []
 		}
 	]
 }

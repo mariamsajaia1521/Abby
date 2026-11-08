@@ -1,79 +1,445 @@
-import { emptyState, type State } from './types';
+import { ageMonths } from "./dates";
+import { db } from "./supabase";
+import type {
+  Booth,
+  Memory,
+  Mood,
+  Pet,
+  PetData,
+  PetInput,
+  Profile,
+  RoutePoint,
+  Vaccination,
+  VetContact,
+  Voucher,
+  WalkSession,
+} from "./types";
 
-// Accept only validated phone numbers in actionable contact links.
-export function phoneHref(value: string): string | null {
-  const match = /^(\+?[\d\s().-]+?)(?:\s*(?:ext\.?|x|#)\s*(\d{1,6}))?$/i.exec(value.trim());
-  if (!match) return null;
-  const number = match[1].replace(/[\s().-]/g, '');
-  return /^\+?\d{3,15}$/.test(number) ? `tel:${number}${match[2] ? `;ext=${match[2]}` : ''}` : null;
+async function ownerId(): Promise<string> {
+  const { data, error } = await db().auth.getUser();
+  if (error) throw error;
+  if (!data.user?.email_confirmed_at)
+    throw new Error("USER:ჯერ დაადასტურე შენი ელფოსტა.");
+  return data.user.id;
 }
-
-export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { credentials: 'same-origin', ...options });
-  const result = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) throw new Error(result.error || 'მოთხოვნა ვერ შესრულდა. სცადე ხელახლა.');
-  return result;
+async function readAll<T>(
+  query: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await query(offset, offset + 499);
+    if (error) throw error;
+    rows.push(...((data || []) as T[]));
+    if (!data || data.length < 500) return rows;
+  }
 }
-export const json = (method: string, value: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
-
-export async function restoreBackup(file: File, restore: (state: State) => Promise<void>) {
-  const backup = JSON.parse(await file.text()) as { state?: State; media?: { url: string; data: string }[] } & Partial<State>;
-  const source = backup.state || (Object.hasOwn(backup, 'dog') ? Object.fromEntries(Object.keys(emptyState()).filter(key => Object.hasOwn(backup, key)).map(key => [key, backup[key as keyof State]])) as Partial<State> : null);
-  if (!source || typeof source !== 'object' || (source.memories !== undefined && !Array.isArray(source.memories)) || !Array.isArray(backup.media || [])) throw new Error('სარეზერვო ფაილი არასწორია.');
-  const state = structuredClone(source) as State;
-  const uploaded: string[] = [];
+export async function getPets(): Promise<Pet[]> {
+  const owner = await ownerId();
+  return readAll<Pet>((from, to) =>
+    db()
+      .from("pets")
+      .select("*")
+      .eq("owner_id", owner)
+      .order("created_at")
+      .order("id")
+      .range(from, to),
+  );
+}
+export async function getProfile(): Promise<Profile | null> {
+  const owner = await ownerId();
+  const { data, error } = await db()
+    .from("profiles")
+    .select("*")
+    .eq("id", owner)
+    .maybeSingle();
+  if (error) throw error;
+  return data as Profile | null;
+}
+export async function saveProfile(displayName: string): Promise<void> {
+  const owner = await ownerId();
+  const { error } = await db()
+    .from("profiles")
+    .upsert({ id: owner, display_name: displayName.trim() });
+  if (error) throw error;
+}
+export async function uploadPhoto(
+  file: File,
+  folder: "pets" | "memories",
+): Promise<string> {
+  if (
+    !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+    file.size > 8 * 1024 * 1024 ||
+    file.size === 0
+  )
+    throw new Error("USER:აირჩიე JPG, PNG ან WebP ფოტო, მაქსიმუმ 8 მბ.");
+  let bitmap: ImageBitmap;
   try {
-    for (const item of backup.media || []) {
-      if (!/^\/api\/media\/[a-f0-9]{32}$/.test(item.url) || !/^data:video\/(mp4|webm);base64,/.test(item.data)) throw new Error('ვიდეოს მონაცემები არასწორია.');
-      const blob = await (await fetch(item.data)).blob();
-      const result = await request<{ url: string }>('/api/media', { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
-      uploaded.push(result.url);
-      state.memories = (state.memories || []).map(memory => memory.videoUrl === item.url ? { ...memory, videoUrl: result.url } : memory);
-    }
-    await restore(state);
-  } catch (error) {
-    await Promise.all(uploaded.map(url => request(url, { method: 'DELETE' }).catch(() => undefined)));
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("USER:სურათი ვერ გაიხსნა. აირჩიე სხვა ფოტო.");
+  }
+  const valid =
+    bitmap.width > 0 &&
+    bitmap.height > 0 &&
+    bitmap.width * bitmap.height <= 64_000_000;
+  bitmap.close();
+  if (!valid)
+    throw new Error(
+      "USER:ფოტოს ზომა მეტისმეტად დიდია. აირჩიე 64 მეგაპიქსელზე მცირე ფოტო.",
+    );
+  const owner = await ownerId();
+  const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[
+    file.type
+  ];
+  const path = `${owner}/${folder}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await db().storage.from("pet-media").upload(path, file, {
+    contentType: file.type,
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (error) throw error;
+  return path;
+}
+export async function removePhoto(path: string): Promise<void> {
+  const { error } = await db().storage.from("pet-media").remove([path]);
+  if (error) throw error;
+}
+export async function signedPhoto(path: string): Promise<string> {
+  const { data, error } = await db()
+    .storage.from("pet-media")
+    .createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
+}
+export async function savePet(
+  input: PetInput,
+  file: File | null,
+  previous?: Pet,
+): Promise<Pet> {
+  const owner = await ownerId();
+  const path = file ? await uploadPhoto(file, "pets") : previous?.photo_path;
+  if (!path) throw new Error("USER:დაამატე შენი მეგობრის რეალური ფოტო.");
+  const payload = {
+    ...input,
+    name: input.name.trim(),
+    breed: input.breed.trim(),
+    microchip: input.microchip?.trim() || null,
+    owner_id: owner,
+    photo_path: path,
+  };
+  const query = previous
+    ? db()
+        .from("pets")
+        .update(payload)
+        .eq("id", previous.id)
+        .eq("owner_id", owner)
+    : db().from("pets").insert(payload);
+  const { data, error } = await query.select().single();
+  if (error) {
+    if (file) await removePhoto(path).catch(() => undefined);
     throw error;
   }
+  if (file && previous?.photo_path)
+    await removePhoto(previous.photo_path).catch(() => undefined);
+  return data as Pet;
 }
-
-export function legacyState(): State | null {
-  const mapping: Partial<Record<keyof State, string>> = {
-    dog: 'petlog.dog', routineEntries: 'petlog.routine', healthRecords: 'petlog.health',
-    weightEntries: 'petlog.weight', memories: 'petlog.memories', walkSpots: 'petlog.walk-spots'
+export async function deletePet(pet: Pet): Promise<void> {
+  const owner = await ownerId();
+  const memories = await readAll<{ photo_path: string }>((from, to) =>
+    db()
+      .from("memories")
+      .select("photo_path")
+      .eq("pet_id", pet.id)
+      .eq("owner_id", owner)
+      .order("id")
+      .range(from, to),
+  );
+  const { data, error } = await db()
+    .from("pets")
+    .delete()
+    .eq("id", pet.id)
+    .eq("owner_id", owner)
+    .select("id")
+    .single();
+  if (error || !data) throw error || new Error("USER:ჩანაწერი ვერ მოიძებნა.");
+  await Promise.all(
+    [
+      pet.photo_path,
+      ...(memories || []).map((item) => item.photo_path as string),
+    ].map((path) => removePhoto(path).catch(() => undefined)),
+  );
+}
+export async function getPetData(petId: string): Promise<PetData> {
+  const owner = await ownerId();
+  const results = await Promise.all([
+    readAll<Vaccination>((from, to) =>
+      db()
+        .from("vaccinations")
+        .select("*")
+        .eq("owner_id", owner)
+        .eq("pet_id", petId)
+        .order("administered_on", { ascending: false })
+        .order("id")
+        .range(from, to),
+    ),
+    readAll<VetContact>((from, to) =>
+      db()
+        .from("vet_contacts")
+        .select("*")
+        .eq("owner_id", owner)
+        .eq("pet_id", petId)
+        .order("created_at")
+        .order("id")
+        .range(from, to),
+    ),
+    readAll<Memory>((from, to) =>
+      db()
+        .from("memories")
+        .select("*")
+        .eq("owner_id", owner)
+        .eq("pet_id", petId)
+        .order("taken_on", { ascending: false })
+        .order("id")
+        .range(from, to),
+    ),
+    readAll<Omit<WalkSession, "route">>((from, to) =>
+      db()
+        .from("walk_sessions")
+        .select(
+          "id,owner_id,pet_id,mood,started_at,ended_at,distance_m,paw_coins",
+        )
+        .eq("owner_id", owner)
+        .eq("pet_id", petId)
+        .order("started_at", { ascending: false })
+        .order("id")
+        .range(from, to),
+    ),
+    readAll<Voucher>((from, to) =>
+      db()
+        .from("user_vouchers")
+        .select("*")
+        .eq("owner_id", owner)
+        .eq("pet_id", petId)
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to),
+    ),
+    db()
+      .from("walk_sessions")
+      .select("*")
+      .eq("owner_id", owner)
+      .is("ended_at", null)
+      .maybeSingle(),
+  ]);
+  if (results[5].error) throw results[5].error;
+  const activeWalk = results[5].data as WalkSession | null;
+  return {
+    vaccinations: results[0],
+    vets: results[1],
+    memories: results[2],
+    walks: results[3].map((walk) => ({
+      ...walk,
+      route: activeWalk?.id === walk.id ? activeWalk.route : [],
+    })),
+    vouchers: results[4],
+    activeWalk,
   };
-  const state = emptyState();
-  try {
-    for (const [collection, key] of Object.entries(mapping) as [keyof State, string][]) {
-      const raw = localStorage.getItem(key);
-      if (raw) Object.assign(state, { [collection]: JSON.parse(raw) });
-    }
-    return state.dog || Object.entries(state).some(([key, value]) => key !== 'dog' && Array.isArray(value) && value.length) ? state : null;
-  } catch { return null; }
 }
-export function clearLegacy() {
-  for (const key of ['petlog.dog','petlog.routine','petlog.health','petlog.weight','petlog.memories','petlog.walk-spots']) {
-    try { localStorage.removeItem(key); } catch { /* optional cache */ }
+export async function getWalk(id: string): Promise<WalkSession> {
+  const owner = await ownerId();
+  const { data, error } = await db()
+    .from("walk_sessions")
+    .select("*")
+    .eq("id", id)
+    .eq("owner_id", owner)
+    .single();
+  if (error) throw error;
+  return data as WalkSession;
+}
+type HealthInput = Omit<Vaccination, "id" | "owner_id" | "created_at">;
+type VetInput = Omit<VetContact, "id" | "owner_id" | "created_at">;
+export async function saveVaccination(
+  input: HealthInput,
+  id?: string,
+): Promise<void> {
+  const owner = await ownerId();
+  const payload = { ...input, owner_id: owner };
+  const query = id
+    ? db()
+        .from("vaccinations")
+        .update(payload)
+        .eq("id", id)
+        .eq("owner_id", owner)
+    : db().from("vaccinations").insert(payload);
+  const { error } = await query.select("id").single();
+  if (error) throw error;
+}
+export async function saveVet(input: VetInput, id?: string): Promise<void> {
+  const owner = await ownerId();
+  const payload = { ...input, owner_id: owner };
+  const query = id
+    ? db()
+        .from("vet_contacts")
+        .update(payload)
+        .eq("id", id)
+        .eq("owner_id", owner)
+    : db().from("vet_contacts").insert(payload);
+  const { error } = await query.select("id").single();
+  if (error) throw error;
+}
+export async function deleteRecord(
+  table: "vaccinations" | "vet_contacts" | "memories",
+  id: string,
+): Promise<void> {
+  const owner = await ownerId();
+  const { error } = await db()
+    .from(table)
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", owner)
+    .select("id")
+    .single();
+  if (error) throw error;
+}
+export async function saveMemory(
+  input: { pet_id: string; caption: string; taken_on: string },
+  file: File | null,
+  previous?: Memory,
+): Promise<void> {
+  const owner = await ownerId();
+  const path = file
+    ? await uploadPhoto(file, "memories")
+    : previous?.photo_path;
+  if (!path) throw new Error("USER:ჯერ აირჩიე ფოტო.");
+  const payload = { ...input, owner_id: owner, photo_path: path };
+  const query = previous
+    ? db()
+        .from("memories")
+        .update(payload)
+        .eq("id", previous.id)
+        .eq("owner_id", owner)
+    : db().from("memories").insert(payload);
+  const { error } = await query.select("id").single();
+  if (error) {
+    if (file) await removePhoto(path).catch(() => undefined);
+    throw error;
   }
+  if (file && previous?.photo_path)
+    await removePhoto(previous.photo_path).catch(() => undefined);
 }
-
-export async function imageData(file: File, size = 1200): Promise<string> {
-  if (!file.type.startsWith('image/')) throw new Error('აირჩიე სურათი.');
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const scale = Math.min(1, size / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(img.width * scale));
-      canvas.height = Math.max(1, Math.round(img.height * scale));
-      const context = canvas.getContext('2d');
-      if (!context) { URL.revokeObjectURL(url); reject(new Error('სურათი ვერ დამუშავდა.')); return; }
-      context.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL('image/jpeg', .72));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('სურათი ვერ ჩაიტვირთა.')); };
-    img.src = url;
+export async function getBooths(pet: Pet): Promise<Booth[]> {
+  await ownerId();
+  const data = await readAll<Booth>((from, to) =>
+    db()
+      .from("partner_booths")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to),
+  );
+  const age = ageMonths(pet.birth_date);
+  const now = Date.now();
+  return (data as Booth[]).filter(
+    (booth) =>
+      (!booth.species.length || booth.species.includes(pet.species)) &&
+      (!booth.breeds.length ||
+        booth.breeds.some(
+          (breed) =>
+            breed.toLocaleLowerCase("ka-GE") ===
+            pet.breed.toLocaleLowerCase("ka-GE"),
+        )) &&
+      age >= booth.min_age_months &&
+      (booth.max_age_months === null || age <= booth.max_age_months) &&
+      Date.parse(booth.starts_at) <= now &&
+      (!booth.expires_at || Date.parse(booth.expires_at) > now),
+  );
+}
+export async function claimVoucher(
+  boothId: string,
+  petId: string,
+): Promise<Voucher> {
+  await ownerId();
+  const { data, error } = await db().rpc("claim_voucher", {
+    p_booth_id: boothId,
+    p_pet_id: petId,
   });
+  if (error) throw error;
+  const voucher = Array.isArray(data) ? data[0] : data;
+  if (!voucher?.id || typeof voucher.code !== "string")
+    throw new Error("Voucher response is incomplete");
+  return voucher as Voucher;
+}
+export async function cancelVoucher(id: string): Promise<void> {
+  const owner = await ownerId();
+  const { error } = await db()
+    .from("user_vouchers")
+    .update({ status: "cancelled" })
+    .eq("id", id)
+    .eq("owner_id", owner)
+    .eq("status", "active")
+    .select("id")
+    .single();
+  if (error) throw error;
+}
+export async function applyForBooth(input: {
+  business_name: string;
+  contact_name: string;
+  email: string;
+  phone: string;
+  category: "clinic" | "shop";
+  message: string;
+}): Promise<void> {
+  const owner = await ownerId();
+  const { error } = await db()
+    .from("partner_applications")
+    .insert({ ...input, owner_id: owner });
+  if (error) throw error;
+}
+export async function startWalk(
+  petId: string,
+  mood: Mood,
+): Promise<WalkSession> {
+  const owner = await ownerId();
+  const { data, error } = await db()
+    .from("walk_sessions")
+    .insert({ owner_id: owner, pet_id: petId, mood })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as WalkSession;
+}
+export async function updateWalk(
+  id: string,
+  route: RoutePoint[],
+  finish = false,
+): Promise<WalkSession> {
+  const owner = await ownerId();
+  const { data, error } = await db()
+    .from("walk_sessions")
+    .update({
+      route,
+      ...(finish ? { ended_at: new Date().toISOString() } : {}),
+    })
+    .eq("id", id)
+    .eq("owner_id", owner)
+    .is("ended_at", null)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as WalkSession;
+}
+export async function deleteWalk(id: string): Promise<void> {
+  const owner = await ownerId();
+  const { error } = await db()
+    .from("walk_sessions")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", owner)
+    .select("id")
+    .single();
+  if (error) throw error;
 }

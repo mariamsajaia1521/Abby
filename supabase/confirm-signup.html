@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+  </head>
+  <body
+    style="
+      margin: 0;
+      background: #faf7f2;
+      color: #1c1917;
+      font-family: Arial, sans-serif;
+      line-height: 1.9;
+      padding: 32px 16px;
+    "
+  >
+    <div
+      style="
+        max-width: 480px;
+        margin: auto;
+        background: #fff;
+        border: 1px solid #efece6;
+        border-radius: 24px;
+        padding: 32px;
+      "
+    >
+      <p
+        style="
+          color: #1b4332;
+          font-size: 28px;
+          font-weight: bold;
+          letter-spacing: -1px;
+        "
+      >
+        petlog<span style="color: #e07a5f">.</span>
+      </p>
+      <h1 style="color: #1b4332; font-size: 23px; line-height: 1.8">
+        დაადასტურე შენი ელფოსტა
+      </h1>
+      <p style="color: #78716c; font-size: 14px">
+        შენი მეგობრის პირადი სივრცე მზადაა. დასადასტურებლად აპში შეიყვანე ეს
+        კოდი:
+      </p>
+      <p
+        style="
+          background: #f3f5ec;
+          border-radius: 12px;
+          text-align: center;
+          font-size: 30px;
+          letter-spacing: 8px;
+          font-weight: bold;
+          padding: 16px;
+          color: #1b4332;
+        "
+      >
+        {{ .Token }}
+      </p>
+      <p style="font-size: 14px; color: #78716c">
+        ან გახსენი ეს ბმული რეგისტრაციის იმავე ბრაუზერში:
+      </p>
+      <a
+        href="{{ .ConfirmationURL }}"
+        style="
+          display: block;
+          background: #1b4332;
+          color: #fff;
+          text-decoration: none;
+          padding: 14px 18px;
+          border-radius: 12px;
+          text-align: center;
+          font-size: 14px;
+        "
+        >ელფოსტის დადასტურება</a
+      >
+      <p style="font-size: 12px; color: #78716c; margin-top: 24px">
+        თუ ანგარიში შენ არ შეგიქმნია, ამ წერილს ნუ უპასუხებ და კოდს ნუ
+        გააზიარებ.
+      </p>
+    </div>
+  </body>
+</html>

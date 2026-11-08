@@ -1,4 +1,4 @@
-name: Deploy PetLog preview to GitHub Pages
+name: Deploy PetLog to GitHub Pages
 
 on:
   push:
@@ -21,13 +21,14 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
       - run: npm ci
-      - name: Typecheck and build the public preview
+      - name: Test, typecheck and build
         env:
-          VITE_STATIC_PREVIEW: 'true'
-        run: npm run build -- --base "/${{ github.event.repository.name }}/"
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm test && npm run build -- --base "/${{ github.event.repository.name }}/"
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: dist

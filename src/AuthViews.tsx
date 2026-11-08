@@ -1,149 +1,583 @@
-import { useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, CheckCircle, Eye, EyeOff, Loading02, LogOut01, Play, Upload01 } from '@untitledui/icons';
-import { clearLegacy, json, legacyState, request, restoreBackup } from './api';
-import { Brand } from './components/UI';
-import type { Dog, State, User } from './types';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  Eye,
+  EyeOff,
+  Heart,
+  Mail,
+  ShieldCheck,
+} from "./components/icons";
+import { Brand, Button, ErrorNotice, Paw } from "./components/UI";
+import { authRedirect, db, errorMessage, isConfigured } from "./supabase";
 
-function WelcomePanel() {
-  return <aside className="auth-aside" aria-labelledby="auth-aside-title">
-    <div className="auth-aside-content">
-      <span className="auth-aside-label">PetLog Workspace</span>
-      <h2 id="auth-aside-title" className="section-title">ჯანმრთელობის ისტორია.<br/>საჭირო ინფორმაცია, საჭირო დროს.</h2>
-      <p className="auth-aside-description">ჩანაწერები, კონტაქტები და დაგეგმილი ზრუნვა — შენი მეგობრის პირად სივრცეში.</p>
-      <ul className="auth-benefits">
-        <li><CheckCircle size={20} aria-hidden="true"/><span>ვიზიტებისა და აცრების ისტორია</span></li>
-        <li><CheckCircle size={20} aria-hidden="true"/><span>მოვლის გეგმები და შეხსენებები</span></li>
-        <li><CheckCircle size={20} aria-hidden="true"/><span>წონის ცვლილების ისტორია</span></li>
-      </ul>
-      <p className="auth-aside-caption">ყველა ჩანაწერი ერთ ანგარიშში.</p>
-    </div>
-  </aside>;
+export function AuthLayout({ children }: { children: ReactNode }) {
+  return (
+    <main className="auth-layout">
+      <aside className="auth-editorial">
+        <img
+          className="editorial-photo"
+          src={`${import.meta.env.BASE_URL}welcome-dog.jpg`}
+          alt="ძაღლი მწვანე ბაღში"
+          fetchPriority="high"
+        />
+        <div className="editorial-shade" />
+        <div className="editorial-top">
+          <Brand light />
+          <span className="editorial-label">
+            პატარა მეგობარი. დიდი სიყვარული.
+          </span>
+        </div>
+        <div className="editorial-copy">
+          <span className="editorial-kicker">
+            <span /> სიყვარულით შექმნილი სივრცე
+          </span>
+          <h1>
+            მეტი ბედნიერი
+            <br />
+            დღე, <span>ერთად.</span>
+          </h1>
+          <p>
+            მათი მთელი სამყარო შენ ხარ.
+            <br />
+            შენზე ზრუნვაში კი ჩვენ დაგეხმარებით.
+          </p>
+          <div className="editorial-chips">
+            <span>
+              <Heart size={15} /> ჯანმრთელობა
+            </span>
+            <span>
+              <Paw size={16} /> თავგადასავლები
+            </span>
+            <span>
+              <ShieldCheck size={16} /> სიმშვიდე
+            </span>
+          </div>
+        </div>
+        <span className="editorial-footnote">
+          შენი მეგობრის კეთილდღეობა იწყება აქ.
+        </span>
+        <div className="editorial-photo-note">PetLog-ის სარედაქციო ფოტო</div>
+      </aside>
+      <section className="auth-right">
+        <div className="auth-mobile-brand">
+          <Brand />
+        </div>
+        <div className="auth-content">{children}</div>
+        <footer className="auth-footer">
+          <span>© {new Date().getFullYear()} PetLog</span>
+          <span>
+            <ShieldCheck size={14} /> შენი პირადი სივრცე
+          </span>
+        </footer>
+      </section>
+    </main>
+  );
 }
 
-export function Auth({ onSuccess, onDemo }: { onSuccess: (user: User, state: State, warning?: string) => void; onDemo: () => void }) {
-  const [mode, setMode] = useState<'register' | 'login'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export function Auth({
+  onVerification,
+  initialError = "",
+}: {
+  onVerification: (email: string) => void;
+  initialError?: string;
+}) {
+  const [mode, setMode] = useState<"login" | "register" | "reset">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
+  const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const submitting = useRef(false);
-
+  const [error, setError] = useState(initialError);
+  const [notice, setNotice] = useState("");
+  const lock = useRef(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting.current) return;
-    submitting.current = true;
+    if (lock.current) return;
+    lock.current = true;
     setBusy(true);
-    setError('');
+    setError("");
+    setNotice("");
+    const address = email.trim();
     try {
-      const snapshot = mode === 'register' ? legacyState() : null;
-      const result = await request<{ user: User; state: State }>(`/api/auth/${mode}`, json('POST', { email: email.trim(), password }));
-      let state = result.state;
-      let warning = '';
-      if (snapshot) {
-        try { state = (await request<{ state: State }>('/api/state/import', json('POST', { state: snapshot }))).state; clearLegacy(); }
-        catch { warning = 'ძველი მონაცემების გადმოტანა ვერ მოხერხდა. ბრაუზერში არსებული ასლი შენარჩუნებულია.'; }
+      if (mode === "register") {
+        const { data, error: cause } = await db().auth.signUp({
+          email: address,
+          password,
+          options: { emailRedirectTo: authRedirect() },
+        });
+        if (cause) throw cause;
+        if (data.session) {
+          await db().auth.signOut();
+          throw new Error(
+            "USER:რეგისტრაცია დროებით მიუწვდომელია. მოგვიანებით სცადე ხელახლა.",
+          );
+        }
+        setPassword("");
+        onVerification(address);
+      } else if (mode === "reset") {
+        const { error: cause } = await db().auth.resetPasswordForEmail(
+          address,
+          { redirectTo: authRedirect() },
+        );
+        if (cause) throw cause;
+        setNotice(
+          "თუ ეს ელფოსტა რეგისტრირებულია, პაროლის აღდგენის ბმულს მიიღებ.",
+        );
+      } else {
+        const { error: cause } = await db().auth.signInWithPassword({
+          email: address,
+          password,
+        });
+        if (cause?.code === "email_not_confirmed") {
+          onVerification(address);
+          return;
+        }
+        if (cause) throw cause;
+        setPassword("");
       }
-      setPassword('');
-      onSuccess(result.user, state, warning);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'შესვლა ვერ მოხერხდა. სცადე ხელახლა.'); }
-    finally { submitting.current = false; setBusy(false); }
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
   }
-
-  return <main className="auth-page auth-layout">
-    <section className="auth-form-wrap" aria-labelledby="auth-title">
-      <div className="auth-form">
-        <div className="auth-brand"><Brand/></div>
-        <header className="auth-heading">
-          <h1 id="auth-title" className="auth-title text-3xl">{mode === 'register' ? 'შექმენი ანგარიში' : 'შედი ანგარიშში'}</h1>
-          <p className="auth-description page-description text-sm">{mode === 'register' ? 'რეგისტრაციისთვის მიუთითე ელფოსტა და პაროლი.' : 'შეიყვანე შენი ელფოსტა და პაროლი.'}</p>
-        </header>
-        <form className="auth-fields" onSubmit={event => void submit(event)} aria-busy={busy} aria-describedby={error ? 'auth-error' : undefined}>
-          <label className="ui-label" htmlFor="auth-email">
-            ელფოსტა
-            <input id="auth-email" name="email" className="ui-input" type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="email" maxLength={254} required placeholder="name@example.com" disabled={busy}/>
-          </label>
-          <div>
-            <label className="ui-label" htmlFor="auth-password">პაროლი</label>
-            <div className="password-field">
-              <input id="auth-password" name="password" className="ui-input" type={visible ? 'text' : 'password'} minLength={mode === 'register' ? 12 : undefined} maxLength={256} value={password} onChange={event => setPassword(event.target.value)} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required placeholder="შეიყვანე პაროლი" disabled={busy} aria-describedby={mode === 'register' ? 'password-hint' : undefined}/>
-              <button type="button" className="icon-button" disabled={busy} aria-label={visible ? 'პაროლის დამალვა' : 'პაროლის ჩვენება'} aria-pressed={visible} aria-controls="auth-password" onClick={() => setVisible(!visible)}>
-                {visible ? <EyeOff size={18} aria-hidden="true"/> : <Eye size={18} aria-hidden="true"/>}
-              </button>
-            </div>
-            {mode === 'register' && <p id="password-hint" className="field-hint">გამოიყენე მინიმუმ 12 სიმბოლო.</p>}
-          </div>
-          {error && <p id="auth-error" role="alert" className="form-error">{error}</p>}
-          <button className="btn btn-primary auth-submit" type="submit" disabled={busy}>
-            {busy ? <><Loading02 className="spin" size={18} aria-hidden="true"/> მიმდინარეობს…</> : mode === 'register' ? 'ანგარიშის შექმნა' : 'შესვლა'}
-          </button>
-        </form>
-        <div className="auth-divider" aria-hidden="true"><span/>ან<span/></div>
-        <button className="btn btn-secondary auth-demo" type="button" disabled={busy} onClick={onDemo}><Play size={18} aria-hidden="true"/> დემოს ნახვა</button>
-        <p className="demo-caption">სადემონსტრაციო მონაცემები · ანგარიშის გარეშე</p>
-        <p className="auth-switch">
-          <span>{mode === 'login' ? 'ჯერ არ გაქვს ანგარიში?' : 'უკვე გაქვს ანგარიში?'}</span>{' '}
-          <button className="text-link" type="button" disabled={busy} onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); setPassword(''); setVisible(false); }}>{mode === 'login' ? 'რეგისტრაცია' : 'შესვლა'}</button>
+  function changeMode(value: typeof mode) {
+    setMode(value);
+    setError("");
+    setNotice("");
+    setPassword("");
+  }
+  return (
+    <AuthLayout>
+      <div className="auth-intro">
+        <span className="eyebrow">
+          <span className="tiny-leaf" /> ზრუნვა სიყვარულით
+        </span>
+        <h2>
+          {mode === "register" ? (
+            <>
+              ყველაფერი იწყება
+              <br /> ერთი მეგობრობით.
+            </>
+          ) : mode === "reset" ? (
+            <>
+              დავიბრუნოთ
+              <br /> შენი სივრცე.
+            </>
+          ) : (
+            <>
+              კეთილი იყოს
+              <br /> შენი დაბრუნება.
+            </>
+          )}
+        </h2>
+        <p>
+          {mode === "register"
+            ? "შექმენი შენი მეგობრის ჯანმრთელობისა და ბედნიერი მოგონებების პირადი სივრცე."
+            : mode === "reset"
+              ? "მოგწერთ ბმულს, რომლითაც ახალ პაროლს აირჩევ."
+              : "შენი მეგობრის პატარა სამყარო აქ გელოდება."}
         </p>
       </div>
-      <footer className="auth-form-footer"><span>© {new Date().getFullYear()} PetLog</span></footer>
-    </section>
-    <WelcomePanel/>
-  </main>;
+      {mode !== "reset" && (
+        <div className="auth-tabs" aria-label="ავტორიზაციის ტიპი">
+          <button
+            type="button"
+            className={mode === "login" ? "active" : ""}
+            aria-pressed={mode === "login"}
+            onClick={() => changeMode("login")}
+            disabled={busy}
+          >
+            შესვლა
+          </button>
+          <button
+            type="button"
+            className={mode === "register" ? "active" : ""}
+            aria-pressed={mode === "register"}
+            onClick={() => changeMode("register")}
+            disabled={busy}
+          >
+            რეგისტრაცია
+          </button>
+        </div>
+      )}
+      <form
+        className="form-stack auth-form"
+        onSubmit={(event) => void submit(event)}
+        aria-busy={busy}
+      >
+        <fieldset disabled={busy}>
+          <label className="field">
+            ელფოსტა
+            <div className="input-icon">
+              <Mail size={18} />
+              <input
+                type="email"
+                name="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="შენი ელფოსტის მისამართი"
+                autoComplete="email"
+                maxLength={254}
+                required
+              />
+            </div>
+          </label>
+          {mode !== "reset" && (
+            <div className="field">
+              <span className="field-top">
+                <label htmlFor="auth-password">პაროლი</label>
+                {mode === "login" && (
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => changeMode("reset")}
+                  >
+                    დაგავიწყდა?
+                  </button>
+                )}
+              </span>
+              <div className="input-password">
+                <input
+                  id="auth-password"
+                  type={visible ? "text" : "password"}
+                  name="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder={
+                    mode === "register"
+                      ? "მინიმუმ 12 სიმბოლო"
+                      : "შეიყვანე შენი პაროლი"
+                  }
+                  autoComplete={
+                    mode === "register" ? "new-password" : "current-password"
+                  }
+                  required
+                  minLength={mode === "register" ? 12 : 1}
+                  maxLength={256}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setVisible(!visible)}
+                  aria-label={visible ? "პაროლის დამალვა" : "პაროლის ჩვენება"}
+                >
+                  {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+          )}
+          {mode === "register" && (
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={accepted}
+                onChange={(event) => setAccepted(event.target.checked)}
+                required
+              />
+              <span>
+                მსურს პირადი ანგარიშის შექმნა და ელფოსტის დადასტურება.
+              </span>
+            </label>
+          )}
+        </fieldset>
+        {error && <ErrorNotice message={error} />}
+        <Button
+          className="auth-submit"
+          busy={busy}
+          disabled={!isConfigured}
+          type="submit"
+        >
+          {mode === "register"
+            ? "შექმენი ანგარიში"
+            : mode === "reset"
+              ? "აღდგენის ბმულის გაგზავნა"
+              : "შესვლა"}
+          <ArrowRight size={18} />
+        </Button>
+        {notice && (
+          <p className="success-notice" role="status">
+            {notice}
+          </p>
+        )}
+        {!isConfigured && (
+          <p className="connection-note" role="status">
+            სერვისთან კავშირი მზადდება. შესვლა მალე იქნება ხელმისაწვდომი.
+          </p>
+        )}
+      </form>
+      {mode === "reset" ? (
+        <button
+          type="button"
+          className="auth-switch text-link"
+          onClick={() => changeMode("login")}
+        >
+          შესვლაზე დაბრუნება <ArrowRight size={15} />
+        </button>
+      ) : (
+        <p className="auth-switch">
+          {mode === "login" ? "პირველად ხარ აქ?" : "უკვე ჩვენი მეგობარი ხარ?"}{" "}
+          <button
+            type="button"
+            className="text-link"
+            disabled={busy}
+            onClick={() => changeMode(mode === "login" ? "register" : "login")}
+          >
+            {mode === "login" ? "შემოგვიერთდი" : "შესვლა"}
+            <ArrowUpRight size={14} />
+          </button>
+        </p>
+      )}
+      <div className="auth-reassurance">
+        <span>
+          <ShieldCheck size={18} />
+        </span>
+        <p>
+          შენი მეგობრის ისტორია — მხოლოდ შენთვის.
+          <br />
+          <small>მონაცემები დაცულია შენს პირად ანგარიშში.</small>
+        </p>
+      </div>
+    </AuthLayout>
+  );
 }
 
-export function Onboarding({ save, restore, logout }: { save: (dog: Dog) => Promise<void>; restore: (state: State) => Promise<void>; logout: () => Promise<void> }) {
-  const [name, setName] = useState('');
-  const [breed, setBreed] = useState('');
-  const [gender, setGender] = useState<Dog['gender']>('female');
+export function VerifyEmail({
+  email,
+  onBack,
+  onVerified,
+}: {
+  email: string;
+  onBack: () => Promise<void>;
+  onVerified: () => Promise<void>;
+}) {
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [cooldown, setCooldown] = useState(60);
   const lock = useRef(false);
-  const backupInput = useRef<HTMLInputElement>(null);
-
-  async function run(action: () => Promise<void>) {
+  useEffect(() => {
+    if (!cooldown) return;
+    const timer = setTimeout(
+      () => setCooldown((value) => Math.max(0, value - 1)),
+      1000,
+    );
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState === "visible")
+        void onVerified().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", check);
+    return () => document.removeEventListener("visibilitychange", check);
+  }, [onVerified]);
+  async function verify(event: FormEvent) {
+    event.preventDefault();
     if (lock.current) return;
-    lock.current = true; setBusy(true); setError('');
-    try { await action(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'შენახვა ვერ მოხერხდა.'); }
-    finally { lock.current = false; setBusy(false); }
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const { error: cause } = await db().auth.verifyOtp({
+        email,
+        token: code,
+        type: "signup",
+      });
+      if (cause) throw cause;
+      await onVerified();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
   }
-
-  return <main className="auth-page auth-layout">
-    <section className="auth-form-wrap" aria-labelledby="onboarding-title">
-      <div className="auth-form">
-        <div className="auth-brand"><Brand/></div>
-        <header className="auth-heading">
-          <h1 id="onboarding-title" className="auth-title text-3xl">შექმენი ძაღლის პროფილი</h1>
-          <p className="auth-description page-description text-sm">მიუთითე ძირითადი ინფორმაცია. სხვა დეტალებს მოგვიანებით დაამატებ.</p>
-        </header>
-        <form className="auth-fields" aria-busy={busy} aria-describedby={error ? 'onboarding-error' : undefined} onSubmit={event => { event.preventDefault(); if (!name.trim()) { setError('მიუთითე შენი ძაღლის სახელი.'); return; } void run(() => save({ name: name.trim(), breed: breed.trim(), gender, age: '', species: 'ძაღლი', sterilization: 'unknown', createdAt: Date.now() })); }}>
-          <label className="ui-label" htmlFor="onboarding-name">
-            სახელი
-            <input id="onboarding-name" name="name" className="ui-input" value={name} maxLength={40} onChange={event => setName(event.target.value)} required disabled={busy} placeholder="მაგ. აბი" autoComplete="off"/>
-          </label>
-          <label className="ui-label" htmlFor="onboarding-breed">
-            <span>ჯიში <span className="field-optional">(არასავალდებულო)</span></span>
-            <input id="onboarding-breed" name="breed" className="ui-input" value={breed} maxLength={60} onChange={event => setBreed(event.target.value)} disabled={busy} placeholder="მაგ. ლაბრადორი" autoComplete="off"/>
-          </label>
-          <label className="ui-label" htmlFor="onboarding-gender">
-            სქესი
-            <select id="onboarding-gender" name="gender" className="ui-select" value={gender} onChange={event => setGender(event.target.value as Dog['gender'])} disabled={busy}><option value="female">მდედრი</option><option value="male">მამრი</option></select>
-          </label>
-          {error && <p id="onboarding-error" className="form-error" role="alert">{error}</p>}
-          <button className="btn btn-primary auth-submit" type="submit" disabled={busy}>
-            {busy ? <><Loading02 className="spin" size={18} aria-hidden="true"/> მიმდინარეობს…</> : <>პროფილის შექმნა <ArrowRight size={18} aria-hidden="true"/></>}
-          </button>
-        </form>
-        <div className="onboarding-restore">
-          <p id="onboarding-restore-hint">უკვე გაქვს PetLog-ის სარეზერვო ასლი?</p>
-          <button className="btn btn-secondary" type="button" disabled={busy} aria-describedby="onboarding-restore-hint" onClick={() => backupInput.current?.click()}><Upload01 size={18} aria-hidden="true"/> ასლის აღდგენა</button>
-          <input ref={backupInput} type="file" accept="application/json,.json" hidden disabled={busy} aria-label="სარეზერვო ასლის არჩევა" onChange={event => { const file = event.target.files?.[0]; if (file) void run(() => restoreBackup(file, restore)); event.target.value = ''; }}/>
-        </div>
-        <button className="text-link onboarding-logout" type="button" disabled={busy} onClick={() => void run(logout)}><LogOut01 size={16} aria-hidden="true"/> ანგარიშიდან გასვლა</button>
+  async function resend() {
+    if (cooldown || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const { error: cause } = await db().auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: authRedirect() },
+      });
+      if (cause) throw cause;
+      setCooldown(60);
+      setNotice("ახალი წერილი გამოგზავნილია. შეამოწმე სპამის საქაღალდეც.");
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <AuthLayout>
+      <div className="verification-icon">
+        <Mail size={30} />
+        <span>
+          <Check size={13} />
+        </span>
       </div>
-      <footer className="auth-form-footer"><span>© {new Date().getFullYear()} PetLog</span></footer>
-    </section>
-    <WelcomePanel/>
-  </main>;
+      <div className="auth-intro">
+        <p className="eyebrow">ერთი პატარა ნაბიჯი</p>
+        <h2>
+          ელფოსტის
+          <br />
+          დადასტურება.
+        </h2>
+        <p>
+          დადასტურების ბმული და 6-ნიშნა კოდი გამოგიგზავნეთ მისამართზე{" "}
+          <strong className="email-address">{email}</strong>
+        </p>
+      </div>
+      <form className="form-stack" onSubmit={(event) => void verify(event)}>
+        <label className="field">
+          დადასტურების კოდი
+          <input
+            className="otp-input"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]{6}"
+            autoComplete="one-time-code"
+            maxLength={6}
+            minLength={6}
+            value={code}
+            onChange={(event) =>
+              setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+            }
+            placeholder="· · · · · ·"
+            required
+            disabled={busy}
+            autoFocus
+          />
+        </label>
+        {error && <ErrorNotice message={error} />}
+        <Button type="submit" busy={busy} disabled={code.length !== 6}>
+          ელფოსტის დადასტურება
+          <ArrowRight size={18} />
+        </Button>
+        {notice && (
+          <p className="success-notice" role="status">
+            {notice}
+          </p>
+        )}
+      </form>
+      <p className="auth-switch">
+        არ მიგიღია წერილი?{" "}
+        <button
+          type="button"
+          className="text-link"
+          disabled={busy || cooldown > 0}
+          onClick={() => void resend()}
+        >
+          {cooldown ? `ხელახლა გაგზავნა (${cooldown})` : "ხელახლა გაგზავნა"}
+        </button>
+      </p>
+      <Button
+        variant="ghost"
+        disabled={busy}
+        onClick={() => {
+          setError("");
+          void onBack().catch((cause) => setError(errorMessage(cause)));
+        }}
+      >
+        სხვა ელფოსტის გამოყენება
+      </Button>
+      <div className="auth-reassurance">
+        <ShieldCheck size={22} />
+        <p>
+          შენი სივრცე გაიხსნება ელფოსტის
+          <br />
+          წარმატებით დადასტურების შემდეგ.
+        </p>
+      </div>
+    </AuthLayout>
+  );
+}
+
+export function RecoverPassword({ onDone }: { onDone: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    if (password !== confirm) {
+      setError("პაროლები ერთმანეთს არ ემთხვევა.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const { error: cause } = await db().auth.updateUser({ password });
+      if (cause) throw cause;
+      onDone();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <AuthLayout>
+      <div className="auth-intro">
+        <p className="eyebrow">შენი პირადი სივრცე</p>
+        <h2>
+          აირჩიე
+          <br />
+          ახალი პაროლი.
+        </h2>
+        <p>გამოიყენე მინიმუმ 12 სიმბოლო.</p>
+      </div>
+      <form className="form-stack" onSubmit={(event) => void submit(event)}>
+        <label className="field">
+          ახალი პაროლი
+          <input
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={12}
+            maxLength={256}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={busy}
+          />
+        </label>
+        <label className="field">
+          გაიმეორე პაროლი
+          <input
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={12}
+            maxLength={256}
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+            disabled={busy}
+          />
+        </label>
+        {error && <ErrorNotice message={error} />}
+        <Button busy={busy} type="submit">
+          პაროლის შენახვა
+          <ArrowRight size={18} />
+        </Button>
+      </form>
+    </AuthLayout>
+  );
 }

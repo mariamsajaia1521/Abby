@@ -2,53 +2,89 @@
 <html lang="ka">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#7f56d9" />
-    <meta name="description" content="PetLog — შენი მეგობრის ჯანმრთელობა, მნიშვნელოვანი თარიღები და ყოველდღიური ზრუნვა ერთ პირად სივრცეში." />
-    <link rel="icon" type="image/png" href="%BASE_URL%app-logo.png" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#FAF7F2" />
+    <meta
+      name="description"
+      content="PetLog — შენი მეგობრის ჯანმრთელობა, ბედნიერი მოგონებები და ყოველდღიური თავგადასავლები ერთ პირად სივრცეში."
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%petlog-mark.svg" />
     <link rel="apple-touch-icon" href="%BASE_URL%app-logo.png" />
     <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
-    <title>PetLog — ზრუნვის პირადი სივრცე</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <title>PetLog — მეტი ბედნიერი დღე, ერთად.</title>
     <style>
-      .petlog-startup{min-height:100dvh;display:grid;place-items:center;padding:24px;box-sizing:border-box;background:#fafafa;color:#414651;font:15px/1.8 system-ui,sans-serif;text-align:center}
-      .petlog-startup>div{max-width:440px}.petlog-startup h1{color:#7f56d9;font-size:30px;letter-spacing:-1px}.petlog-startup p{margin:16px 0}.petlog-startup a,.petlog-startup button{display:inline-block;margin:6px;padding:10px 16px;border:1px solid #d5d7da;border-radius:8px;background:white;color:#6941c6;font:inherit;text-decoration:none;cursor:pointer}.petlog-startup small{display:block;color:#717680}
+      .petlog-startup {
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        box-sizing: border-box;
+        background: #faf7f2;
+        color: #78716c;
+        font:
+          14px/1.9 "Noto Sans Georgian",
+          sans-serif;
+        text-align: center;
+      }
+      .petlog-startup > div {
+        max-width: 420px;
+      }
+      .petlog-startup h1 {
+        color: #1b4332;
+        font-family: "Plus Jakarta Sans", sans-serif;
+        font-size: 34px;
+        letter-spacing: -2px;
+      }
+      .petlog-startup p {
+        margin: 18px 0;
+      }
+      .petlog-startup button {
+        padding: 12px 20px;
+        border: 0;
+        border-radius: 12px;
+        background: #1b4332;
+        color: white;
+        font: inherit;
+        cursor: pointer;
+      }
     </style>
   </head>
-  <body style="margin:0">
+  <body>
     <div id="root">
-      <main id="petlog-startup" class="petlog-startup">
+      <main class="petlog-startup">
         <div>
           <h1>petlog.</h1>
-          <p id="petlog-startup-status" role="status">შენი ზრუნვის სივრცე იტვირთება…</p>
-          <div id="petlog-startup-actions" hidden>
-            <button id="petlog-startup-retry" type="button">თავიდან ცდა</button>
-            <a href="https://mariamsajaia1521.github.io/Abby/?recovery=1">ონლაინ დიზაინის გახსნა</a>
-            <small>ლოკალური აპის გასაშვებად გახსენი PetLog.command.</small>
-          </div>
-          <noscript>PetLog-ის გასახსნელად ბრაუზერში JavaScript ჩართული უნდა იყოს.</noscript>
+          <p id="startup-status" role="status">შენი პირადი სივრცე იტვირთება…</p>
+          <button id="startup-retry" type="button" hidden>თავიდან ცდა</button
+          ><noscript>PetLog-ის გასახსნელად საჭიროა JavaScript.</noscript>
         </div>
       </main>
     </div>
     <script>
-      (function () {
-        function showStartupError(message) {
-          var status = document.getElementById('petlog-startup-status');
-          var actions = document.getElementById('petlog-startup-actions');
-          if (!status || !actions) return;
-          status.textContent = message;
-          status.setAttribute('role', 'alert');
-          actions.hidden = false;
+      document
+        .getElementById("startup-retry")
+        .addEventListener("click", function () {
+          location.reload();
+        });
+      setTimeout(function () {
+        var status = document.getElementById("startup-status");
+        if (status) {
+          status.textContent =
+            "აპი ვერ ჩაიტვირთა. გადაამოწმე ინტერნეტი და განაახლე გვერდი.";
+          status.setAttribute("role", "alert");
+          document.getElementById("startup-retry").hidden = false;
         }
-        document.getElementById('petlog-startup-retry').addEventListener('click', function () { location.reload(); });
-        if (location.protocol === 'file:') {
-          showStartupError('ეს ფაილი აპს პირდაპირ ვერ გაუშვებს. გამოიყენე PetLog.command ან გახსენი ონლაინ დიზაინი.');
-        } else {
-          window.addEventListener('error', function (event) {
-            if (event.target && event.target.type === 'module') showStartupError('აპის ფაილები ვერ ჩაიტვირთა. სცადე გვერდის განახლება.');
-          }, true);
-          setTimeout(function () { showStartupError('ჩატვირთვა ვერ დასრულდა. გადაამოწმე კავშირი და სცადე ხელახლა.'); }, 15000);
-        }
-      })();
+      }, 15000);
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

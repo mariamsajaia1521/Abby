@@ -1,179 +1,650 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, Bell, CalendarDays, Check, ChevronDown, ChevronRight, CircleHelp, Heart, HeartPulse, LayoutDashboard, Plus, Search, Settings, ShieldCheck, Stethoscope, UserRound, Weight, X } from './components/icons';
-import { json, request } from './api';
-import { Brand, Dialog, PetAvatar } from './components/UI';
-import { formatDate } from './dates';
-import { createDemoState } from './demo';
-import { Overview } from './Overview';
-import { emptyState, today, type Collection, type Navigate, type Page, type PageIntent, type State, type User } from './types';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import type { User } from "@supabase/supabase-js";
+import { getPetData, getPets, getProfile } from "./api";
+import { Auth, RecoverPassword, VerifyEmail } from "./AuthViews";
+import { entryGate } from "./domain";
+import {
+  DeleteRecordDialog,
+  HealthPage,
+  MemoriesPage,
+  Overview,
+  RecordEditor,
+  type DeleteTarget,
+  type Editor,
+} from "./HealthHub";
+import { PetWizard } from "./PetWizard";
+import { ProfilePage } from "./ProfilePage";
+import { authRedirect, db, errorMessage, supabase } from "./supabase";
+import {
+  Brand,
+  Button,
+  Dialog,
+  ErrorNotice,
+  Photo,
+  Skeleton,
+} from "./components/UI";
+import {
+  ArrowRight,
+  Camera,
+  Heart,
+  HeartPulse,
+  LayoutDashboard,
+  LogOut,
+  MapPin,
+  Plus,
+  ShieldCheck,
+  UserRound,
+} from "./components/icons";
+import {
+  emptyPetData,
+  type Page,
+  type Pet,
+  type PetData,
+  type Profile,
+} from "./types";
+import { useWalkTracker } from "./useWalkTracker";
 
-const HealthPage = lazy(() => import('./CarePages').then(module => ({ default: module.HealthPage })));
-const PlanPage = lazy(() => import('./CarePages').then(module => ({ default: module.PlanPage })));
-const ProfilePage = lazy(() => import('./ProfilePages').then(module => ({ default: module.ProfilePage })));
-const VetPage = lazy(() => import('./ProfilePages').then(module => ({ default: module.VetPage })));
-const Auth = lazy(() => import('./AuthViews').then(module => ({ default: module.Auth })));
-const Onboarding = lazy(() => import('./AuthViews').then(module => ({ default: module.Onboarding })));
-const EmergencyPage = lazy(() => import('./AccountPages').then(module => ({ default: module.EmergencyPage })));
-const SettingsPage = lazy(() => import('./AccountPages').then(module => ({ default: module.SettingsPage })));
-
-function LoadingScreen() {
-  return <main className="loading-screen" role="status"><Brand/><span className="loading-line"/><p>PetLog იტვირთება…</p></main>;
-}
-
-const navigation = [
-  { id: 'overview' as const, label: 'მთავარი', icon: LayoutDashboard },
-  { id: 'profile' as const, label: 'პროფილი', icon: UserRound },
-  { id: 'health' as const, label: 'ჯანმრთელობა', icon: HeartPulse },
-  { id: 'plan' as const, label: 'ზრუნვის გეგმა', icon: CalendarDays },
-  { id: 'vet' as const, label: 'ვეტერინარი', icon: Stethoscope }
-];
-const pageNames: Record<Page, string> = { overview: 'მთავარი', profile: 'პროფილი', health: 'ჯანმრთელობა', plan: 'ზრუნვის გეგმა', vet: 'ვეტერინარი', emergency: 'გადაუდებელი ინფორმაცია', settings: 'პარამეტრები' };
-const demoUser: User = { id: 'petlog-demo', email: 'demo@petlog.example' };
-const previewOnly = import.meta.env.VITE_STATIC_PREVIEW === 'true';
-const isDemoRoute = () => location.hash.startsWith('#demo/');
-const startsInDemo = () => previewOnly || isDemoRoute();
-function route(): Page {
-  const value = location.hash.replace(/^#(?:demo\/)?\/?/, '');
-  return Object.hasOwn(pageNames, value) ? value as Page : 'overview';
-}
-
-function CommandMenu({ go, close }: { go: Navigate; close: () => void }) {
-  const [query, setQuery] = useState('');
-  const actions: { label: string; detail: string; page: Page; intent?: PageIntent; icon: typeof Search }[] = [
-    ...navigation.map(item => ({ ...item, page: item.id, detail: 'გვერდის გახსნა' })),
-    { label: 'სამედიცინო ჩანაწერის დამატება', detail: 'სწრაფი მოქმედება', page: 'health', intent: 'health-record', icon: Plus },
-    { label: 'წონის დამატება', detail: 'სწრაფი მოქმედება', page: 'health', intent: 'weight', icon: Weight },
-    { label: 'შეხსენების დამატება', detail: 'სწრაფი მოქმედება', page: 'plan', intent: 'reminder', icon: Bell },
-    { label: 'გადაუდებელი ინფორმაცია', detail: 'მნიშვნელოვანი კონტაქტები', page: 'emergency', icon: ShieldCheck },
-    { label: 'პარამეტრები', detail: 'ანგარიში და სარეზერვო ასლი', page: 'settings', icon: Settings }
+const ClubPage = lazy(() =>
+  import("./ClubPage").then((module) => ({ default: module.ClubPage })),
+);
+const WalkPage = lazy(() =>
+  import("./WalkPage").then((module) => ({ default: module.WalkPage })),
+);
+const pages: { id: Page; label: string; short: string; icon: typeof Heart }[] =
+  [
+    {
+      id: "overview",
+      label: "ჩემი სივრცე",
+      short: "მთავარი",
+      icon: LayoutDashboard,
+    },
+    {
+      id: "health",
+      label: "ჯანმრთელობა",
+      short: "ჯანმრთელობა",
+      icon: HeartPulse,
+    },
+    { id: "memories", label: "მოგონებები", short: "მოგონებები", icon: Camera },
+    { id: "club", label: "კლუბი და სტენდები", short: "კლუბი", icon: Heart },
+    { id: "walk", label: "სეირნობის რადარი", short: "სეირნობა", icon: MapPin },
+    {
+      id: "profile",
+      label: "მეგობრის პროფილი",
+      short: "პროფილი",
+      icon: UserRound,
+    },
   ];
-  const filtered = actions.filter(action => `${action.label} ${action.detail}`.toLowerCase().includes(query.trim().toLowerCase()));
-  return <Dialog title="სად გადავიდეთ?" onClose={close}><label className="ui-label command-search"><span className="sr-only">გვერდის ან მოქმედების ძიება</span><Search size={19} aria-hidden="true"/><input autoFocus className="ui-input" placeholder="მოძებნე გვერდი ან მოქმედება…" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && filtered.length) { event.preventDefault(); close(); go(filtered[0].page, filtered[0].intent); } }}/></label><div className="command-results">{filtered.length ? filtered.map(action => <button type="button" key={action.label} onClick={() => { close(); go(action.page, action.intent); }}><span className="command-icon"><action.icon size={19}/></span><span><strong>{action.label}</strong><small>{action.detail}</small></span><ArrowUpRight size={16}/></button>) : <div className="empty-state compact-empty"><Search size={24}/><h3>შედეგი ვერ მოიძებნა</h3><p>სცადე „ჯანმრთელობა“, „წონა“ ან „გეგმა“.</p></div>}</div><p className="field-hint command-hint"><kbd>Esc</kbd> დასახურად <span>·</span> <kbd>Enter</kbd> პირველი შედეგის გასახსნელად</p></Dialog>;
+function readPending(): string {
+  try {
+    return sessionStorage.getItem("petlog.verification-email") || "";
+  } catch {
+    return "";
+  }
+}
+function storePending(email: string) {
+  try {
+    if (email) sessionStorage.setItem("petlog.verification-email", email);
+    else sessionStorage.removeItem("petlog.verification-email");
+  } catch {
+    /* Verification can still proceed in memory. */
+  }
+}
+function currentPage(): Page {
+  return (
+    pages.find((page) => `#${page.id}` === location.hash)?.id || "overview"
+  );
 }
 
 export default function App() {
-  const [demo, setDemo] = useState(startsInDemo);
-  const [user, setUser] = useState<User | null>(() => startsInDemo() ? demoUser : null);
-  const [state, setState] = useState<State>(() => startsInDemo() ? createDemoState() : emptyState());
-  const [tab, setTab] = useState<Page>(route);
-  const [intent, setIntent] = useState<PageIntent | null>(null);
-  const [loading, setLoading] = useState(() => !startsInDemo());
-  const [connectionError, setConnectionError] = useState(false);
-  const [toast, setToast] = useState('');
-  const [commandOpen, setCommandOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const mainRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (startsInDemo()) return;
-    const controller = new AbortController();
-    fetch('/api/auth/me', { credentials: 'same-origin', signal: controller.signal }).then(async response => {
-      if (response.status === 401) return;
-      if (!response.ok) throw new Error('server');
-      const result = await response.json() as { user: User; state: State };
-      setUser(result.user); setState({ ...emptyState(), ...result.state });
-    }).catch(cause => { if (!controller.signal.aborted && cause) setConnectionError(true); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+  const [pending, setPending] = useState(readPending);
+  const [recovery, setRecovery] = useState(false);
+  const [pets, setPets] = useState<Pet[] | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [dataError, setDataError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const authSequence = useRef(0);
+  const userRef = useRef<User | null>(null);
+  const refreshAuth = useCallback(async () => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+    const sequence = ++authSequence.current;
+    try {
+      const { data: local, error: sessionError } =
+        await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!local.session) {
+        if (sequence !== authSequence.current) return;
+        userRef.current = null;
+        setUser(null);
+        setPets(null);
+        setProfile(null);
+        setAuthLoading(false);
+        return;
+      }
+      const { data, error } = await supabase.auth.getUser();
+      if (sequence !== authSequence.current) return;
+      if (error) throw error;
+      if (userRef.current?.id !== data.user.id) {
+        setPets(null);
+        setProfile(null);
+      }
+      userRef.current = data.user;
+      setUser(data.user);
+      setAuthError("");
+      if (data.user.email_confirmed_at) {
+        storePending("");
+        setPending("");
+      }
+    } catch (cause) {
+      if (sequence !== authSequence.current) return;
+      userRef.current = null;
+      setUser(null);
+      setPets(null);
+      setAuthError(errorMessage(cause));
+    } finally {
+      if (sequence === authSequence.current) setAuthLoading(false);
+    }
   }, []);
-
   useEffect(() => {
-    const handler = () => { setTab(route()); setIntent(null); };
-    window.addEventListener('hashchange', handler);
-    window.addEventListener('popstate', handler);
-    return () => { window.removeEventListener('hashchange', handler); window.removeEventListener('popstate', handler); };
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+    const url = new URL(location.href);
+    const hashParams = new URLSearchParams(url.hash.slice(1));
+    if (url.searchParams.has("error") || hashParams.has("error")) {
+      setAuthError(
+        "დადასტურების ბმული არასწორია ან ვადა გაუვიდა. მოითხოვე ახალი წერილი.",
+      );
+      history.replaceState(null, "", authRedirect());
+    }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") setRecovery(true);
+      if (event === "SIGNED_OUT") {
+        ++authSequence.current;
+        userRef.current = null;
+        setUser(null);
+        setPets(null);
+        setProfile(null);
+        setRecovery(false);
+        setAuthLoading(false);
+        return;
+      }
+      if (session && userRef.current?.id !== session.user.id)
+        setAuthLoading(true);
+      setTimeout(() => {
+        void refreshAuth();
+      }, 0);
+    });
+    void refreshAuth();
+    return () => {
+      ++authSequence.current;
+      subscription.unsubscribe();
+    };
+  }, [refreshAuth]);
+  useEffect(() => {
+    if (!user?.email_confirmed_at) return;
+    let active = true;
+    setDataError("");
+    void Promise.all([getPets(), getProfile()])
+      .then(([friends, account]) => {
+        if (active) {
+          setPets(friends);
+          setProfile(account);
+        }
+      })
+      .catch((cause) => {
+        if (active) setDataError(errorMessage(cause));
+      });
+    return () => {
+      active = false;
+    };
+  }, [user?.id, user?.email_confirmed_at, retry]);
+  async function logout() {
+    const { error } = await db().auth.signOut();
+    if (error) throw error;
+    storePending("");
+    setPending("");
+    setPets(null);
+    setProfile(null);
+    setUser(null);
+    history.replaceState(null, "", authRedirect());
+  }
+  function verification(email: string) {
+    storePending(email);
+    setPending(email);
+  }
+  async function onVerified() {
+    await refreshAuth();
+  }
+  if (authLoading)
+    return (
+      <main className="gate-loading">
+        <Brand />
+        <Skeleton label="პირადი ანგარიშის შემოწმება" />
+      </main>
+    );
+  if (recovery && user)
+    return <RecoverPassword onDone={() => setRecovery(false)} />;
+  if (!user)
+    return pending ? (
+      <VerifyEmail email={pending} onVerified={onVerified} onBack={logout} />
+    ) : (
+      <Auth onVerification={verification} initialError={authError} />
+    );
+  const gate = entryGate(true, !!user.email_confirmed_at, pets?.length || 0);
+  if (gate === "verify")
+    return (
+      <VerifyEmail
+        email={user.email || pending}
+        onVerified={onVerified}
+        onBack={logout}
+      />
+    );
+  if (dataError || pets === null)
+    return (
+      <main className="gate-loading">
+        <Brand />
+        {dataError ? (
+          <div className="card gate-error">
+            <h1>შენი სივრცე დროებით მიუწვდომელია</h1>
+            <ErrorNotice
+              message={dataError}
+              onRetry={() => setRetry((value) => value + 1)}
+            />
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void logout().catch((cause) =>
+                  setAuthError(errorMessage(cause)),
+                );
+              }}
+            >
+              ანგარიშიდან გასვლა
+            </Button>
+          </div>
+        ) : (
+          <Skeleton />
+        )}
+      </main>
+    );
+  if (gate === "onboarding")
+    return <PetWizard onSaved={(pet) => setPets([pet])} onLogout={logout} />;
+  return (
+    <Workspace
+      key={user.id}
+      user={user}
+      pets={pets}
+      setPets={setPets}
+      profile={profile}
+      setProfile={setProfile}
+      logout={logout}
+    />
+  );
+}
+
+function Workspace({
+  user,
+  pets,
+  setPets,
+  profile,
+  setProfile,
+  logout,
+}: {
+  user: User;
+  pets: Pet[];
+  setPets: (pets: Pet[]) => void;
+  profile: Profile | null;
+  setProfile: (profile: Profile | null) => void;
+  logout: () => Promise<void>;
+}) {
+  const [petId, setPetId] = useState(pets[0].id);
+  const pet = pets.find((friend) => friend.id === petId) || pets[0];
+  const [page, setPage] = useState<Page>(currentPage);
+  const [data, setData] = useState<PetData>(emptyPetData);
+  const [loadedFor, setLoadedFor] = useState("");
+  const [error, setError] = useState("");
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
+  const [addPet, setAddPet] = useState(false);
+  const [toast, setToast] = useState("");
+  const sequence = useRef(0);
+  const currentPetRef = useRef(pet.id);
+  currentPetRef.current = pet.id;
+  const heading = useRef<HTMLElement>(null);
+  const refresh = useCallback(async () => {
+    const id = pet.id;
+    const ticket = ++sequence.current;
+    try {
+      const records = await getPetData(id);
+      if (ticket === sequence.current && id === currentPetRef.current) {
+        if (records.activeWalk && records.activeWalk.pet_id !== id) {
+          setPetId(records.activeWalk.pet_id);
+          return;
+        }
+        setData(records);
+        setLoadedFor(id);
+        setError("");
+      }
+    } catch (cause) {
+      if (ticket === sequence.current) setError(errorMessage(cause));
+    }
+  }, [pet.id]);
+  useEffect(() => {
+    setData(emptyPetData());
+    setLoadedFor("");
+    setError("");
+    void refresh();
+    return () => {
+      ++sequence.current;
+    };
+  }, [refresh]);
+  const tracker = useWalkTracker(pet, data.walks, refresh);
+  useEffect(() => {
+    const listener = () => setPage(currentPage());
+    window.addEventListener("hashchange", listener);
+    return () => window.removeEventListener("hashchange", listener);
   }, []);
-
   useEffect(() => {
-    document.title = user ? `${pageNames[tab]} — PetLog` : 'PetLog — მეტი სიმშვიდე. უკეთესი ზრუნვა.';
-  }, [tab, user]);
-
+    document.title = `${pages.find((item) => item.id === page)?.label} — PetLog`;
+  }, [page]);
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => setToast(''), 6000);
+    const timer = setTimeout(() => setToast(""), 5000);
     return () => clearTimeout(timer);
   }, [toast]);
-
-  useEffect(() => {
-    if (!user || !state.dog) return;
-    const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setCommandOpen(value => !value); }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [user, state.dog]);
-
-  const weight = useMemo(() => [...state.weightEntries].sort((a, b) => b.date.localeCompare(a.date) || b.timestamp - a.timestamp)[0], [state.weightEntries]);
-  const openCount = state.reminders.filter(item => item.status === 'open').length;
-  const dueCount = state.reminders.filter(item => item.status === 'open' && item.date <= today()).length;
-
-  function go(page: Page, action?: PageIntent) {
-    setTab(page); setIntent(action ?? null);
-    const hash = `#${demo ? 'demo/' : ''}${page}`;
-    if (location.hash !== hash) history.pushState(null, '', hash);
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    if (!action) requestAnimationFrame(() => mainRef.current?.focus({ preventScroll: true }));
+  function go(value: Page) {
+    setPage(value);
+    history.pushState(null, "", `#${value}`);
+    window.scrollTo({ top: 0, behavior: "instant" });
+    requestAnimationFrame(() => heading.current?.focus());
   }
-
-  async function save<K extends Collection>(collection: K, value: State[K]) {
-    if (!demo) await request(`/api/state/${collection}`, json('PUT', { value }));
-    setState(previous => ({ ...previous, [collection]: value }));
+  async function changed() {
+    await refresh();
+    setToast("შენახულია შენს პირად სივრცეში.");
   }
-
-  async function restore(value: State) {
-    const result = demo ? { state: { ...emptyState(), ...value } } : await request<{ state: State }>('/api/state/restore', json('POST', { state: value }));
-    setState({ ...emptyState(), ...result.state }); go('overview');
-  }
-
-  async function reset() {
-    const result = demo ? { state: emptyState() } : await request<{ state: State }>('/api/state/reset', { method: 'POST' });
-    setState({ ...emptyState(), ...result.state }); go('overview'); setToast('მონაცემები წაიშალა.');
-  }
-
-  async function logout() {
-    if (previewOnly) { setState(createDemoState()); go('overview'); setToast('დემო თავიდან დაიწყო. ცვლილებები არ შენახულა.'); return; }
-    if (demo) { location.hash = ''; location.reload(); return; }
-    await request('/api/auth/logout', { method: 'POST' });
-    setUser(null); setState(emptyState()); setToast(''); setTab('overview'); history.replaceState(null, '', location.pathname);
-  }
-
-  function startDemo() {
-    setDemo(true); setUser(demoUser); setState(createDemoState()); setTab('overview'); setConnectionError(false); setLoading(false);
-    history.replaceState(null, '', '#demo/overview');
-  }
-
-  const toastView = toast && <div className="toast" role="status"><span className="toast-icon"><Check size={16}/></span><span>{toast}</span><button className="icon-button" onClick={() => setToast('')} aria-label="შეტყობინების დახურვა"><X size={17}/></button></div>;
-
-  if (loading) return <LoadingScreen/>;
-  if (connectionError) return <main className="connection-screen"><Brand/><div className="surface connection-card"><span className="section-icon"><CircleHelp size={27}/></span><h1 className="section-title">დაკავშირება ვერ მოხერხდა</h1><p className="page-description">სერვერთან კავშირი დროებით მიუწვდომელია. შენახული ინფორმაცია არ შეცვლილა.</p><button className="btn btn-primary" onClick={() => location.reload()}>თავიდან ცდა <ArrowRight size={17}/></button><button className="text-link" onClick={startDemo}>მანამდე დემოს დათვალიერება <ArrowUpRight size={15}/></button></div></main>;
-  if (!user) return <><Suspense fallback={<LoadingScreen/>}><Auth onDemo={startDemo} onSuccess={(account, data, warning) => { setUser(account); setState({ ...emptyState(), ...data }); if (warning) setToast(warning); }}/></Suspense>{toastView}</>;
-  if (!state.dog) return <><Suspense fallback={<LoadingScreen/>}><Onboarding save={value => save('dog', value)} restore={restore} logout={logout}/></Suspense>{toastView}</>;
-
-  const dog = state.dog;
-  return <div className="app-shell"><a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); mainRef.current?.focus(); }}>მთავარ შინაარსზე გადასვლა</a>
-    <aside className="app-sidebar"><button className="sidebar-brand" onClick={() => go('overview')} aria-label="PetLog — მთავარი"><Brand/></button>
-      <button className="sidebar-search" onClick={() => setCommandOpen(true)} aria-label="გვერდის ან მოქმედების ძიება"><Search size={19}/><span>ძიება</span><kbd>⌘ K</kbd></button>
-      <button className="sidebar-pet" onClick={() => go('profile')} aria-label={`${dog.name} — პროფილის გახსნა`}><PetAvatar name={dog.name} photo={dog.photo}/><span><strong>{dog.name}</strong><small>ჯანმრთელობის პროფილი</small></span><ChevronDown size={16}/></button>
-      <p className="sidebar-label">ზრუნვის მართვა</p><nav className="desktop-nav" aria-label="მთავარი ნავიგაცია">{navigation.map(item => <button key={item.id} aria-label={item.label} title={item.label} aria-current={tab === item.id ? 'page' : undefined} onClick={() => go(item.id)}><item.icon size={19} strokeWidth={1.8} aria-hidden="true"/><span>{item.label}</span>{item.id === 'plan' && openCount > 0 && <small>{openCount}</small>}</button>)}</nav>
-      <div className="sidebar-bottom"><button className={`sidebar-emergency${tab === 'emergency' ? ' is-active' : ''}`} aria-label="გადაუდებელი ინფორმაცია" title="გადაუდებელი ინფორმაცია" onClick={() => go('emergency')} aria-current={tab === 'emergency' ? 'page' : undefined}><span><ShieldCheck size={21} aria-hidden="true"/><ArrowUpRight size={15} aria-hidden="true"/></span><strong>გადაუდებელი ინფორმაცია</strong><small>კონტაქტები და ჯანმრთელობის ბარათი</small></button>
-      <button className="sidebar-settings" aria-current={tab === 'settings' ? 'page' : undefined} onClick={() => go('settings')}><Settings size={18} aria-hidden="true"/>პარამეტრები</button><button className="sidebar-settings" onClick={() => setHelpOpen(true)}><CircleHelp size={18} aria-hidden="true"/>PetLog-ის შესახებ</button>
-      <button className="sidebar-account" aria-label="ანგარიშის პარამეტრები" title="ანგარიშის პარამეტრები" onClick={() => go('settings')}><span className="account-initial">{user.email[0]?.toUpperCase()}</span><span><strong>{demo ? 'დემო ანგარიში' : 'ჩემი ანგარიში'}</strong><small>{demo ? 'მონაცემები არ ინახება' : user.email}</small></span><ChevronRight size={16}/></button></div>
-    </aside>
-    <div className="app-workspace">{demo && <div className="demo-banner"><span><span className="status-dot"/> დემო ვერსია <span className="demo-banner-detail">— შეგიძლია სცადო ყველა ძირითადი მოქმედება. ცვლილებები ამ ვერსიაში არ ინახება.</span></span><button onClick={() => void logout()}>{previewOnly ? 'დემოს თავიდან დაწყება' : 'დემოდან გასვლა'} <ArrowRight size={14}/></button></div>}
-      <header className="topbar"><div className="topbar-inner"><div className="workspace-crumb"><span>ჩემი სივრცე</span><ChevronRight size={13} aria-hidden="true"/><strong>{pageNames[tab]}</strong></div><button className="mobile-brand" onClick={() => go('overview')} aria-label="PetLog — მთავარი"><Brand/></button><div className="top-action"><button className="search-trigger" onClick={() => setCommandOpen(true)} aria-label="გვერდის ან მოქმედების ძიება"><Search size={17}/><span>ძიება</span><kbd>⌘ K</kbd></button><span className="date-chip"><CalendarDays size={16} aria-hidden="true"/>{formatDate(today(), { short: true })}</span><button className="icon-button notification-trigger" aria-label={dueCount ? `${dueCount} შესასრულებელი შეხსენება — გეგმის გახსნა` : 'ზრუნვის გეგმის გახსნა'} onClick={() => go('plan')}><Bell size={20}/>{dueCount > 0 && <span/>}</button><span className="topbar-divider"/><button className="active-pet" onClick={() => go('profile')} aria-label={`${dog.name} — პროფილის ნახვა`}><PetAvatar name={dog.name} photo={dog.photo}/><span>{dog.name}</span><ChevronDown size={14}/></button><button className="icon-button mobile-settings" aria-label="პარამეტრები" onClick={() => go('settings')}><Settings size={20}/></button></div></div></header>
-      <main ref={mainRef} id="main-content" className="main-wrap" tabIndex={-1} aria-label={pageNames[tab]}>
-        <Suspense fallback={<div className="page-loading" role="status"><span className="loading-line"/><p>გვერდი იტვირთება…</p></div>}>
-        {tab === 'overview' && <Overview state={state} go={go}/>}
-        {tab === 'profile' && <ProfilePage dog={dog} vet={state.vet} weight={weight} save={value => save('dog', value)} notify={setToast}/>}
-        {tab === 'health' && <HealthPage entries={state.healthRecords} weights={state.weightEntries} saveEntries={value => save('healthRecords', value)} saveWeights={value => save('weightEntries', value)} notify={setToast} intent={intent ?? undefined} onIntentHandled={() => setIntent(null)}/>}
-        {tab === 'plan' && <PlanPage reminders={state.reminders} save={value => save('reminders', value)} notify={setToast} intent={intent ?? undefined} onIntentHandled={() => setIntent(null)}/>}
-        {tab === 'vet' && <VetPage vet={state.vet} save={value => save('vet', value)} notify={setToast}/>}
-        {tab === 'emergency' && <EmergencyPage state={state} go={go}/>}
-        {tab === 'settings' && <SettingsPage user={user} state={state} restore={restore} reset={reset} logout={logout} notify={setToast} demo={demo} previewOnly={previewOnly}/>}
+  const content =
+    loadedFor !== pet.id ? (
+      error ? (
+        <div className="card gate-error">
+          <h2>მონაცემები ვერ ჩაიტვირთა</h2>
+          <ErrorNotice message={error} onRetry={() => void refresh()} />
+        </div>
+      ) : (
+        <Skeleton />
+      )
+    ) : (
+      <>
+        {error && (
+          <ErrorNotice message={error} onRetry={() => void refresh()} />
+        )}
+        <Suspense fallback={<Skeleton />}>
+          {page === "overview" && (
+            <Overview
+              pet={pet}
+              data={data}
+              displayName={profile?.display_name || ""}
+              go={go}
+              edit={setEditor}
+            />
+          )}{" "}
+          {page === "health" && (
+            <HealthPage data={data} edit={setEditor} remove={setDeleting} />
+          )}{" "}
+          {page === "memories" && (
+            <MemoriesPage data={data} edit={setEditor} remove={setDeleting} />
+          )}{" "}
+          {page === "club" && (
+            <ClubPage
+              key={pet.id}
+              pet={pet}
+              vouchers={data.vouchers}
+              onChanged={changed}
+            />
+          )}{" "}
+          {page === "walk" && (
+            <WalkPage
+              pet={pet}
+              walks={data.walks}
+              tracker={tracker}
+              onChanged={refresh}
+            />
+          )}{" "}
+          {page === "profile" && (
+            <ProfilePage
+              pet={pet}
+              user={user}
+              profile={profile}
+              onProfile={setProfile}
+              onPetSaved={(updated) => {
+                setPets(
+                  pets.map((item) => (item.id === updated.id ? updated : item)),
+                );
+                setToast("პროფილი განახლებულია.");
+              }}
+              onPetDeleted={() =>
+                setPets(pets.filter((item) => item.id !== pet.id))
+              }
+              logout={logout}
+              walkActive={tracker.active}
+            />
+          )}
         </Suspense>
-        <footer className="workspace-footer"><span>PetLog · ზრუნვის პირადი სივრცე</span><span>{demo ? 'სადემონსტრაციო მონაცემები' : 'შენი ინფორმაცია დაცულია ანგარიშით'}</span></footer>
-      </main>
+      </>
+    );
+  return (
+    <div className="app-shell">
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          heading.current?.focus();
+          heading.current?.scrollIntoView({ block: "start" });
+        }}
+      >
+        მთავარ შიგთავსზე გადასვლა
+      </a>
+      <aside className="sidebar">
+        <button
+          type="button"
+          className="brand-button"
+          aria-label="PetLog — მთავარი"
+          onClick={() => go("overview")}
+        >
+          <Brand />
+        </button>
+        <span className="sidebar-caption">მათთვის, ვინც ოჯახია.</span>
+        <div className="sidebar-divider" />
+        <span className="nav-eyebrow">შენი პატარა სამყარო</span>
+        <nav aria-label="მთავარი ნავიგაცია">
+          {pages.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`nav-item ${page === item.id ? "active" : ""}`}
+              aria-current={page === item.id ? "page" : undefined}
+              onClick={() => go(item.id)}
+            >
+              <item.icon size={20} />
+              <span>{item.label}</span>
+              {page === item.id && <span className="nav-active-dot" />}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="sidebar-love">
+            <span>♡</span>
+            <p>
+              სიყვარული დეტალებშია.
+              <br />
+              <strong>ჩვენ მათ შენახვაში გეხმარებით.</strong>
+            </p>
+          </div>
+          <button
+            type="button"
+            className="sidebar-account"
+            onClick={() => go("profile")}
+          >
+            <span className="account-avatar">
+              {(profile?.display_name || user.email || "")
+                .slice(0, 1)
+                .toUpperCase()}
+            </span>
+            <span>
+              <strong>{profile?.display_name || "ჩემი ანგარიში"}</strong>
+              <small>{user.email}</small>
+            </span>
+            <ArrowRight size={15} />
+          </button>
+          <button
+            type="button"
+            className="sidebar-logout"
+            disabled={tracker.active || tracker.busy}
+            title={
+              tracker.active ? "ჯერ შეინახე მიმდინარე სეირნობა" : undefined
+            }
+            onClick={() => {
+              void logout().catch((cause) => setToast(errorMessage(cause)));
+            }}
+          >
+            <LogOut size={15} />
+            ანგარიშიდან გასვლა
+          </button>
+        </div>
+      </aside>
+      <div className="workspace">
+        <header className="topbar">
+          <div className="mobile-brand">
+            <Brand />
+          </div>
+          <div className="topbar-breadcrumb">
+            <span>შენი პირადი სივრცე</span>
+            <span>/</span>
+            <strong>{pages.find((item) => item.id === page)?.label}</strong>
+          </div>
+          <div className="topbar-actions">
+            {tracker.active && (
+              <button
+                type="button"
+                className="active-walk-pill"
+                onClick={() => go("walk")}
+              >
+                <span />
+                {tracker.tracking ? "ვსეირნობთ" : "სეირნობა შეჩერებულია"}
+              </button>
+            )}
+            <div className="pet-switcher">
+              <Photo path={pet.photo_path} alt={pet.name} />
+              <select
+                aria-label="აირჩიე მეგობარი"
+                value={pet.id}
+                onChange={(event) => setPetId(event.target.value)}
+                disabled={tracker.active || tracker.busy}
+              >
+                {pets.map((item) => (
+                  <option value={item.id} key={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              className="icon-button add-pet-button"
+              disabled={tracker.active || tracker.busy}
+              aria-label="ახალი მეგობრის დამატება"
+              onClick={() => setAddPet(true)}
+            >
+              <Plus size={19} />
+            </button>
+          </div>
+        </header>
+        <main
+          id="main-content"
+          className="main-content"
+          ref={heading}
+          tabIndex={-1}
+        >
+          {content}
+          <footer className="workspace-footer">
+            <span>პატარა მეგობარი. მთელი სიყვარული.</span>
+            <span>
+              <ShieldCheck size={14} />
+              შენი პირადი სივრცე · PetLog
+            </span>
+          </footer>
+        </main>
+      </div>
+      <nav className="mobile-dock" aria-label="მობილური ნავიგაცია">
+        {pages.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={page === item.id ? "active" : ""}
+            aria-current={page === item.id ? "page" : undefined}
+            onClick={() => go(item.id)}
+          >
+            <item.icon size={20} />
+            <span>{item.short}</span>
+          </button>
+        ))}
+      </nav>
+      {editor && (
+        <RecordEditor
+          editor={editor}
+          pet={pet}
+          onClose={() => setEditor(null)}
+          onSaved={changed}
+        />
+      )}{" "}
+      {deleting && (
+        <DeleteRecordDialog
+          target={deleting}
+          onClose={() => setDeleting(null)}
+          onSaved={changed}
+        />
+      )}{" "}
+      {addPet && (
+        <Dialog title="ახალი მეგობარი" wide onClose={() => setAddPet(false)}>
+          <PetWizard
+            onCancel={() => setAddPet(false)}
+            onSaved={(friend) => {
+              setPets([...pets, friend]);
+              setPetId(friend.id);
+              setAddPet(false);
+              go("overview");
+            }}
+          />
+        </Dialog>
+      )}
+      {toast && (
+        <div className="toast" role="status">
+          <ShieldCheck size={17} />
+          {toast}
+          <button
+            type="button"
+            className="text-link"
+            onClick={() => setToast("")}
+          >
+            კარგი
+          </button>
+        </div>
+      )}
     </div>
-    <nav className="mobile-nav" aria-label="მობილური ნავიგაცია">{navigation.map(item => <button key={item.id} aria-label={item.label} aria-current={tab === item.id ? 'page' : undefined} onClick={() => go(item.id)}><item.icon size={21} strokeWidth={1.8} aria-hidden="true"/><span>{item.id === 'plan' ? 'გეგმა' : item.id === 'health' ? 'ისტორია' : item.label}</span></button>)}</nav>
-    {toastView}{commandOpen && <CommandMenu go={go} close={() => setCommandOpen(false)}/>}{helpOpen && <Dialog title="პატარა მეგობარი. მთელი ზრუნვა." onClose={() => setHelpOpen(false)}><div className="help-intro"><Brand/><p className="page-description">PetLog შენი მეგობრის ჯანმრთელობის პირადი დღიურია. პროფილი, სამედიცინო ისტორია და მნიშვნელოვანი თარიღები ყოველთვის ერთ სივრცეშია.</p></div><div className="help-steps"><div><HeartPulse size={20}/><span><strong>შეინახე ისტორია</strong><p>დაამატე ვიზიტები, დოკუმენტები და წონის გაზომვები.</p></span></div><div><CalendarDays size={20}/><span><strong>დაგეგმე მომავალი ზრუნვა</strong><p>მოვლენები და შეხსენებები აპის გახსნისას ჩანს.</p></span></div><div><ShieldCheck size={20}/><span><strong>შეინარჩუნე ინფორმაცია</strong><p>პარამეტრებიდან ჩამოტვირთე სრული სარეზერვო ასლი.</p></span></div></div><button className="btn btn-primary w-full" onClick={() => setHelpOpen(false)}>გასაგებია <Check size={17}/></button></Dialog>}
-  </div>;
+  );
 }

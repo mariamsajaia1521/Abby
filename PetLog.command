@@ -3,7 +3,7 @@ set -euo pipefail
 
 petlog_dir="${0:A:h}"
 petlog_origin='http://127.0.0.1:4173'
-petlog_url="$petlog_origin/?design=untitled-ui-final#demo/overview"
+petlog_url="$petlog_origin/"
 cd "$petlog_dir"
 
 petlog_ready() {
@@ -19,11 +19,6 @@ petlog_error() {
   exit 1
 }
 
-if petlog_ready; then
-  /usr/bin/open "$petlog_url"
-  exit 0
-fi
-
 petlog_node="${commands[node]:-}"
 if [[ -z "$petlog_node" ]]; then
   for petlog_candidate in /usr/local/bin/node /opt/homebrew/bin/node; do
@@ -34,15 +29,28 @@ if [[ -z "$petlog_node" ]]; then
   done
 fi
 [[ -n "$petlog_node" ]] || petlog_error 'PetLog-ის გასაშვებად საჭიროა Node.js 24 ან უფრო ახალი ვერსია.'
+export OPENSSL_CONF=/dev/null
 "$petlog_node" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)' ||
   petlog_error 'განაახლე Node.js მინიმუმ 24 ვერსიამდე და ისევ გახსენი PetLog.'
 
-export OPENSSL_CONF=/dev/null
-if [[ ! -f dist/index.html ]]; then
+petlog_needs_build=0
+[[ -f dist/index.html ]] || petlog_needs_build=1
+for petlog_source in src/**/*(N.) public/**/*(N.) index.html vite.config.ts package.json package-lock.json; do
+  if [[ "$petlog_source" -nt dist/index.html ]]; then
+    petlog_needs_build=1
+    break
+  fi
+done
+if [[ "$petlog_needs_build" == 1 ]]; then
   [[ -f node_modules/vite/bin/vite.js && -f node_modules/typescript/bin/tsc ]] ||
     petlog_error 'ჯერ პროექტის საქაღალდეში გაუშვი npm install, შემდეგ ისევ გახსენი ეს ფაილი.'
   "$petlog_node" node_modules/typescript/bin/tsc --noEmit
   "$petlog_node" node_modules/vite/bin/vite.js build
+fi
+
+if petlog_ready; then
+  /usr/bin/open "$petlog_url"
+  exit 0
 fi
 
 print -- 'PetLog იწყებს მუშაობას. ბრაუზერი ავტომატურად გაიხსნება.'
